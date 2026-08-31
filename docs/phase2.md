@@ -59,6 +59,26 @@ naming a substantive policy subject. Seed values live in
 `ingest/src/fara_ingest/sources/fara/seed_data/topics.csv`, loaded via
 `fara_normalize.load_dimensions.load_topics()`.
 
+## Contacts/contributions can't always be scoped to one specific country
+
+Real finding from spot-checking China's graph: two "China" contacts turned out to be
+about "U.S. Government of the Republic of Korea bilateral relations" and "U.S.
+Palestine Bilateral Relations." Traced to the source — registrant 2165 represents both
+`City of Tianjin, China` and `Ministry of Foreign Trade, EGYPT`, and the two
+Supplemental Statement documents in question have `registrant_docs.foreign_principal_name
+= NULL` — FARA's own bulk data doesn't record which specific foreign principal a
+Supplemental Statement (which reports on a registrant's overall period activity) is
+about. This isn't rare: **1,347 of 7,062 registrants (19%) represent more than one
+country**, and 41,347 contact-eligible documents across the archive have no foreign
+principal name on the row at all.
+
+There's no reliable way to disambiguate this from the source data at the individual
+contact/contribution row level, so rather than guess, `/api/countries/{name}` and
+`/api/countries/{name}/graph` attribute a registrant's full reportable-contact and
+contribution activity to *every* country it represents, and `CountryView.tsx` says so
+explicitly, right under the stats — the same "be honest about what isn't verified"
+approach already used for the foreign-principal by-name grouping.
+
 ## China/Taiwan/Hong Kong
 
 Kept fully separate everywhere (search, filters, graph, country stats) per your

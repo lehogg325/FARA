@@ -44,6 +44,13 @@ export function CountryView({ name }: { name: string }) {
         </div>
       </div>
 
+      <p className="group-card-note" style={{ marginTop: 12 }}>
+        Reportable-contact and contribution figures include everything reported by
+        registrants who represent {name}, even activity that may actually belong to
+        another country the same registrant also represents — FARA's filings often
+        don't record which specific foreign principal a contact or contribution was for.
+      </p>
+
       <div className="section">
         <div className="section-title">What {name} is lobbying on</div>
         {topics.data && topics.data.length === 0 && <div className="loading">No topics classified yet.</div>}
