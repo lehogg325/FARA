@@ -4,12 +4,15 @@ import os
 
 import psycopg
 import pytest
-from fara_normalize.load_dimensions import load_document_types, load_jurisdictions
+from fara_normalize.load_dimensions import load_document_types, load_jurisdictions, load_topics
 from fara_normalize.migrate import migrate
 
 TEST_DSN = os.environ.get("FARA_TEST_DATABASE_URL", "postgresql://fara:fara@localhost:5434/fara_test")
 
 _DATA_TABLES = (
+    "reportable_contacts",
+    "document_topics",
+    "topics",
     "extraction_runs",
     "document_extracted_fields",
     "document_text",
@@ -40,6 +43,7 @@ def migrated_conn(test_dsn: str):
     migrate(conn)
     load_jurisdictions(conn)
     load_document_types(conn)
+    load_topics(conn)
     conn.commit()
     yield conn
     conn.rollback()

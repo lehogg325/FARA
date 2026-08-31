@@ -120,11 +120,11 @@ class DocumentSearchResult(BaseModel):
 
 
 class SearchResult(BaseModel):
-    entity_type: str  # 'registrant' | 'foreign_principal' | 'short_form_registrant'
-    entity_id: int
+    entity_type: str  # 'registrant' | 'foreign_principal' | 'short_form_registrant' | 'country'
+    entity_id: int | None  # null for 'country' — navigate by label (the country name) instead
     label: str
     detail: str | None
-    registration_number: int
+    registration_number: int | None
 
 
 class DocumentType(BaseModel):
@@ -134,6 +134,53 @@ class DocumentType(BaseModel):
 
 class Country(BaseModel):
     country_name: str
+    registrant_count: int
+    foreign_principal_count: int
+
+
+class CountryDetail(BaseModel):
+    country_name: str
+    active_registrant_count: int
+    total_registrant_count: int
+    foreign_principal_count: int
+    contact_count: int
+    contribution_total: float | None
+    contribution_count: int
+
+
+class Topic(BaseModel):
+    topic: str
+    topic_label: str
+
+
+class TopicCount(BaseModel):
+    topic: str
+    topic_label: str
+    document_count: int
+
+
+class GraphNode(BaseModel):
+    id: str
+    node_type: str  # 'foreign_principal' | 'registrant' | 'contact' | 'recipient'
+    label: str
+    registration_number: int | None = None
+
+
+class GraphEdge(BaseModel):
+    source: str
+    target: str
+    edge_type: str  # 'represents' | 'contacted' | 'contributed'
+    registrant_doc_id: int | None
+    edge_date: date | None = None
+    amount: float | None = None
+    detail: str | None = None
+
+
+class CountryGraph(BaseModel):
+    country_name: str
+    nodes: list[GraphNode]
+    edges: list[GraphEdge]
+    truncated: bool
 
 
 class DatasetStatus(BaseModel):

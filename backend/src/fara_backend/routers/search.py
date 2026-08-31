@@ -8,9 +8,16 @@ from fara_backend.schemas import SearchResult
 
 router = APIRouter(tags=["search"])
 
-_VALID_TYPES = {"registrant", "foreign_principal", "short_form_registrant"}
+_VALID_TYPES = {"registrant", "foreign_principal", "short_form_registrant", "country"}
 
 _SUBQUERIES = {
+    "country": """
+        SELECT 'country' AS entity_type, NULL AS entity_id, country_name AS label,
+               NULL AS detail, NULL AS registration_number
+        FROM countries
+        WHERE jurisdiction = %(jurisdiction)s AND country_name ILIKE %(q)s
+        ORDER BY country_name LIMIT %(limit)s
+    """,
     "registrant": """
         SELECT 'registrant' AS entity_type, registrant_id AS entity_id, name AS label,
                business_name AS detail, registration_number

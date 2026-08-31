@@ -14,6 +14,9 @@ EXPECTED_TABLES = {
     "document_text",
     "document_extracted_fields",
     "extraction_runs",
+    "reportable_contacts",
+    "topics",
+    "document_topics",
     "schema_migrations",
 }
 
@@ -26,6 +29,7 @@ def test_migrate_applies_all_migrations_in_order(migrated_conn):
             "0002_document_mining.sql",
             "0003_staging_tables.sql",
             "0004_search_indexes.sql",
+            "0005_contacts_and_topics.sql",
         ]
 
 

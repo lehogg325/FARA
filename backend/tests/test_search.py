@@ -6,6 +6,14 @@ def test_search_across_entity_types(client, seeded):
     assert resp.status_code == 200
     types = {r["entity_type"] for r in resp.json()}
     assert "foreign_principal" in types
+    assert "country" in types
+
+
+def test_search_finds_country(client, seeded):
+    resp = client.get("/api/search", params={"q": "iceland", "type": "country"})
+    assert resp.status_code == 200
+    results = resp.json()
+    assert results == [{"entity_type": "country", "entity_id": None, "label": "ICELAND", "detail": None, "registration_number": None}]
 
 
 def test_search_finds_registrant_by_name(client, seeded):

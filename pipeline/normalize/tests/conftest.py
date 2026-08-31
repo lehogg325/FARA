@@ -11,6 +11,9 @@ from fara_normalize.migrate import migrate
 TEST_DSN = os.environ.get("FARA_TEST_DATABASE_URL", "postgresql://fara:fara@localhost:5434/fara_test")
 
 _DATA_TABLES = (
+    "reportable_contacts",
+    "document_topics",
+    "topics",
     "extraction_runs",
     "document_extracted_fields",
     "document_text",

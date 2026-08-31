@@ -6,7 +6,8 @@ export type View =
   | { kind: "foreign-principal"; id: number }
   | { kind: "foreign-principal-group"; name: string; country: string | null }
   | { kind: "document"; id: number }
-  | { kind: "document-search"; q: string };
+  | { kind: "document-search"; q: string }
+  | { kind: "country"; name: string };
 
 interface Store {
   view: View;

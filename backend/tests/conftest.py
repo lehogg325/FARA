@@ -16,6 +16,9 @@ from fara_backend.main import app
 TEST_DSN = os.environ.get("FARA_TEST_DATABASE_URL", "postgresql://fara:fara@localhost:5434/fara_test")
 
 _DATA_TABLES = (
+    "reportable_contacts",
+    "document_topics",
+    "topics",
     "extraction_runs",
     "document_extracted_fields",
     "document_text",
@@ -82,6 +85,10 @@ def seeded(conn):
         cur.execute(
             "INSERT INTO document_types (jurisdiction, document_type_code, document_type_label) "
             "VALUES ('fara', 'EXHIBIT_AB', 'Exhibit AB')"
+        )
+        cur.execute(
+            "INSERT INTO topics (topic, topic_label, sort_order) VALUES "
+            "('diplomacy_bilateral', 'Diplomatic & Bilateral Relations', 9)"
         )
         cur.execute(
             """
@@ -164,6 +171,36 @@ def seeded(conn):
             VALUES (%s, 'fields_llm', 'llm-claude-opus-5-v1', 'succeeded', %s, %s)
             """,
             (registrant_doc_id, now, now),
+        )
+
+        cur.execute(
+            """
+            INSERT INTO document_topics (registrant_doc_id, topic, extractor_version, extracted_at)
+            VALUES (%s, 'diplomacy_bilateral', 'topics-claude-opus-5-v1', %s)
+            """,
+            (registrant_doc_id, now),
+        )
+
+        cur.execute(
+            """
+            INSERT INTO reportable_contacts
+                (registrant_doc_id, contact_date_raw, contact_name_raw, contact_method, purpose,
+                 extraction_method, extractor_version, extracted_at)
+            VALUES (%s, '03/26/2026', 'Rachel Oglesby, Dept of Education', 'Email', 'U.S.-Iceland relations',
+                    'llm', 'contacts-llm-v1', %s)
+            """,
+            (registrant_doc_id, now),
+        )
+
+        cur.execute(
+            """
+            INSERT INTO document_extracted_fields
+                (registrant_doc_id, field_key, field_value_text, field_value_numeric, field_value_date,
+                 extraction_method, extractor_version, extracted_at)
+            VALUES (%s, 'political_contribution[0]', 'Friends of a Senator', 2500.00, '2026-03-01',
+                    'rule', 'rules-v1', %s)
+            """,
+            (registrant_doc_id, now),
         )
 
         cur.execute(

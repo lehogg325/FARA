@@ -121,6 +121,7 @@ body {
 .badge-registrant { background: var(--blue); }
 .badge-foreign_principal { background: var(--orange); }
 .badge-short_form_registrant { background: #54a272; }
+.badge-country { background: var(--indigo); color: var(--lunar); }
 .hit-label { font-weight: 500; color: var(--lunar); }
 .hit-meta { margin-left: auto; font-family: var(--mono); color: var(--gray); font-size: 10.5px; }
 

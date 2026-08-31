@@ -1,0 +1,21 @@
+topic,topic_label,sort_order
+trade_economic,Trade & Economic Relations,1
+investment_business,Investment & Business Development,2
+defense_security,Defense & National Security,3
+technology_export_controls,Technology & Export Controls,4
+energy,Energy,5
+telecommunications,Telecommunications,6
+agriculture,Agriculture & Food,7
+health,Health & Pharmaceuticals,8
+diplomacy_bilateral,Diplomatic & Bilateral Relations,9
+legislation_congress,Legislation & Congressional Advocacy,10
+elections_political,Elections & Political Engagement,11
+sanctions_legal,"Sanctions, Legal & Regulatory Proceedings",12
+human_rights,Human Rights & Humanitarian Advocacy,13
+immigration,Immigration & Visa Policy,14
+tourism_culture,Tourism & Cultural Promotion,15
+media_pr,Media Relations & Public Image,16
+informational_materials,Informational Materials & Media Distribution,17
+think_tank_academic,Think Tank & Academic Engagement,18
+general_representation,General Government Relations & Public Affairs,19
+other,Other / Unclassified,20

@@ -8,14 +8,14 @@ export interface Page<T> {
   offset: number;
 }
 
-export type EntityType = "registrant" | "foreign_principal" | "short_form_registrant";
+export type EntityType = "registrant" | "foreign_principal" | "short_form_registrant" | "country";
 
 export interface SearchResult {
   entity_type: EntityType;
-  entity_id: number;
+  entity_id: number | null; // null for 'country' — navigate by label instead
   label: string;
   detail: string | null;
-  registration_number: number;
+  registration_number: number | null;
 }
 
 export interface RegistrantSummary {
@@ -148,6 +148,60 @@ export interface Meta {
   extraction_coverage: ExtractionCoverage[];
 }
 
+export interface Country {
+  country_name: string;
+  registrant_count: number;
+  foreign_principal_count: number;
+}
+
+export interface CountryDetail {
+  country_name: string;
+  active_registrant_count: number;
+  total_registrant_count: number;
+  foreign_principal_count: number;
+  contact_count: number;
+  contribution_total: number | null;
+  contribution_count: number;
+}
+
+export interface Topic {
+  topic: string;
+  topic_label: string;
+}
+
+export interface TopicCount {
+  topic: string;
+  topic_label: string;
+  document_count: number;
+}
+
+export type GraphNodeType = "foreign_principal" | "registrant" | "contact" | "recipient";
+export type GraphEdgeType = "represents" | "contacted" | "contributed";
+
+export interface GraphNode {
+  id: string;
+  node_type: GraphNodeType;
+  label: string;
+  registration_number: number | null;
+}
+
+export interface GraphEdge {
+  source: string;
+  target: string;
+  edge_type: GraphEdgeType;
+  registrant_doc_id: number | null;
+  edge_date: string | null;
+  amount: number | null;
+  detail: string | null;
+}
+
+export interface CountryGraph {
+  country_name: string;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  truncated: boolean;
+}
+
 async function get<T>(url: string, signal?: AbortSignal): Promise<T> {
   const r = await fetch(url, { signal });
   if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
@@ -187,4 +241,10 @@ export const api = {
   documentFields: (id: number) => get<ExtractedField[]>(`/api/documents/${id}/fields`),
   documentSearch: (q: string, offset = 0, limit = 25) =>
     get<Page<DocumentSearchResult>>(`/api/documents/search${qs({ q, offset, limit })}`),
+
+  countries: () => get<Country[]>("/api/countries"),
+  country: (name: string) => get<CountryDetail>(`/api/countries/${encodeURIComponent(name)}`),
+  countryTopics: (name: string) => get<TopicCount[]>(`/api/countries/${encodeURIComponent(name)}/topics`),
+  countryGraph: (name: string) => get<CountryGraph>(`/api/countries/${encodeURIComponent(name)}/graph`),
+  topics: () => get<Topic[]>("/api/topics"),
 };

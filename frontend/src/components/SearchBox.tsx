@@ -6,6 +6,7 @@ const BADGE_LABEL: Record<SearchResult["entity_type"], string> = {
   registrant: "REGISTRANT",
   foreign_principal: "FOREIGN PRINCIPAL",
   short_form_registrant: "AGENT",
+  country: "COUNTRY",
 };
 
 export function SearchBox() {
@@ -38,9 +39,10 @@ export function SearchBox() {
     setOpen(false);
     setQ("");
     setResults(null);
-    if (hit.entity_type === "registrant") navigate({ kind: "registrant", id: hit.entity_id });
-    else if (hit.entity_type === "foreign_principal") navigate({ kind: "foreign-principal", id: hit.entity_id });
-    else navigate({ kind: "registrant", id: hit.entity_id }); // short-form agents: not their own view yet
+    if (hit.entity_type === "country") navigate({ kind: "country", name: hit.label });
+    else if (hit.entity_type === "registrant" && hit.entity_id !== null) navigate({ kind: "registrant", id: hit.entity_id });
+    else if (hit.entity_type === "foreign_principal" && hit.entity_id !== null) navigate({ kind: "foreign-principal", id: hit.entity_id });
+    else if (hit.entity_id !== null) navigate({ kind: "registrant", id: hit.entity_id }); // short-form agents: not their own view yet
   };
 
   return (
@@ -59,11 +61,12 @@ export function SearchBox() {
             <li className="search-no-results">No matches</li>
           ) : (
             results.map((r) => (
-              <li key={`${r.entity_type}-${r.entity_id}`} onClick={() => select(r)}>
+              <li key={`${r.entity_type}-${r.entity_id}-${r.label}`} onClick={() => select(r)}>
                 <span className={`badge badge-${r.entity_type}`}>{BADGE_LABEL[r.entity_type]}</span>
                 <span className="hit-label">{r.label || "(unnamed)"}</span>
                 <span className="hit-meta">
-                  {r.detail ? `${r.detail} · ` : ""}Reg #{r.registration_number}
+                  {r.detail ? `${r.detail} · ` : ""}
+                  {r.registration_number !== null ? `Reg #${r.registration_number}` : ""}
                 </span>
               </li>
             ))

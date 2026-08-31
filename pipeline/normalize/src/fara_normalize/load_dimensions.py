@@ -50,6 +50,18 @@ def load_countries(conn: psycopg.Connection) -> int:
     return len(rows)
 
 
+def load_topics(conn: psycopg.Connection) -> int:
+    rows = _seed_csv_rows("topics.csv")
+    with conn.cursor() as cur:
+        cur.executemany(
+            "INSERT INTO topics (topic, topic_label, sort_order) "
+            "VALUES (%(topic)s, %(topic_label)s, %(sort_order)s) "
+            "ON CONFLICT (topic) DO UPDATE SET topic_label = excluded.topic_label, sort_order = excluded.sort_order",
+            rows,
+        )
+    return len(rows)
+
+
 def register_observed_country(conn: psycopg.Connection, jurisdiction: str, country_name: str) -> None:
     """Countries aren't FK-enforced (docs/api-notes.md — free text with confirmed
     real anomalies); this auto-registers any value the loaders encounter that

@@ -5,12 +5,12 @@ from fastapi import APIRouter, Depends, Query
 
 from fara_backend.db import get_db
 from fara_backend.schemas import (
-    Country,
     DatasetStatus,
     DocumentType,
     ExtractionCoverage,
     HealthResponse,
     MetaResponse,
+    Topic,
 )
 
 router = APIRouter(tags=["meta"])
@@ -20,6 +20,7 @@ router = APIRouter(tags=["meta"])
 # reporting view, not the pipeline itself.
 _RULES_TARGET_DOC_TYPES = ["REGISTRATION_STATEMENT", "SUPPLEMENTAL_STATEMENT", "SHORT-FORM", "EXHIBIT_AB"]
 _LLM_TARGET_DOC_TYPES = ["EXHIBIT_AB"]
+_CONTACTS_TARGET_DOC_TYPES = ["EXHIBIT_AB", "SUPPLEMENTAL_STATEMENT"]
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -40,12 +41,10 @@ def document_types(
     return [DocumentType(**r) for r in rows]
 
 
-@router.get("/countries", response_model=list[Country])
-def countries(jurisdiction: str = Query("fara"), conn: psycopg.Connection = Depends(get_db)) -> list[Country]:
-    rows = conn.execute(
-        "SELECT country_name FROM countries WHERE jurisdiction = %s ORDER BY country_name", (jurisdiction,)
-    ).fetchall()
-    return [Country(**r) for r in rows]
+@router.get("/topics", response_model=list[Topic])
+def topics(conn: psycopg.Connection = Depends(get_db)) -> list[Topic]:
+    rows = conn.execute("SELECT topic, topic_label FROM topics ORDER BY sort_order").fetchall()
+    return [Topic(**r) for r in rows]
 
 
 @router.get("/meta", response_model=MetaResponse)
@@ -96,6 +95,29 @@ def meta(jurisdiction: str = Query("fara"), conn: psycopg.Connection = Depends(g
         {"j": jurisdiction, "doc_types": _LLM_TARGET_DOC_TYPES},
     ).fetchone()
 
+    contacts_row = conn.execute(
+        """
+        SELECT
+            (SELECT count(*) FROM extraction_runs er JOIN registrant_docs rd ON rd.registrant_doc_id = er.registrant_doc_id
+             WHERE rd.jurisdiction = %(j)s AND er.stage = 'contacts' AND er.status = 'succeeded') AS succeeded,
+            (SELECT count(*) FROM registrant_docs rd JOIN document_text dt ON dt.registrant_doc_id = rd.registrant_doc_id
+             WHERE rd.jurisdiction = %(j)s AND rd.document_type_code = ANY(%(doc_types)s)) AS eligible
+        """,
+        {"j": jurisdiction, "doc_types": _CONTACTS_TARGET_DOC_TYPES},
+    ).fetchone()
+
+    topics_row = conn.execute(
+        """
+        SELECT
+            (SELECT count(*) FROM extraction_runs er JOIN registrant_docs rd ON rd.registrant_doc_id = er.registrant_doc_id
+             WHERE rd.jurisdiction = %(j)s AND er.stage = 'topics' AND er.status = 'succeeded') AS succeeded,
+            (SELECT count(DISTINCT rd.registrant_doc_id) FROM registrant_docs rd
+             JOIN document_extracted_fields def ON def.registrant_doc_id = rd.registrant_doc_id
+             WHERE rd.jurisdiction = %(j)s AND def.field_key = 'nature_of_activities') AS eligible
+        """,
+        {"j": jurisdiction},
+    ).fetchone()
+
     return MetaResponse(
         jurisdiction=jurisdiction,
         data_as_of=data_as_of,
@@ -107,6 +129,12 @@ def meta(jurisdiction: str = Query("fara"), conn: psycopg.Connection = Depends(g
             ),
             ExtractionCoverage(
                 stage="fields_llm", succeeded_count=llm_row["succeeded"], eligible_count=llm_row["eligible"]
+            ),
+            ExtractionCoverage(
+                stage="contacts", succeeded_count=contacts_row["succeeded"], eligible_count=contacts_row["eligible"]
+            ),
+            ExtractionCoverage(
+                stage="topics", succeeded_count=topics_row["succeeded"], eligible_count=topics_row["eligible"]
             ),
         ],
     )

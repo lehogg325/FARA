@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from fara_backend.routers import documents, foreign_principals, meta, registrants, search
+from fara_backend.routers import countries, documents, foreign_principals, meta, registrants, search
 
 app = FastAPI(title="FARA Data Platform API")
 
@@ -19,3 +19,4 @@ app.include_router(search.router, prefix="/api")
 app.include_router(registrants.router, prefix="/api")
 app.include_router(foreign_principals.router, prefix="/api")
 app.include_router(documents.router, prefix="/api")
+app.include_router(countries.router, prefix="/api")

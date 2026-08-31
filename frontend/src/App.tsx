@@ -1,3 +1,4 @@
+import { CountryView } from "./components/CountryView";
 import { DocumentSearchView } from "./components/DocumentSearchView";
 import { DocumentView } from "./components/DocumentView";
 import { EmptyState } from "./components/EmptyState";
@@ -36,6 +37,7 @@ export default function App() {
         )}
         {view.kind === "document" && <DocumentView id={view.id} />}
         {view.kind === "document-search" && <DocumentSearchView q={view.q} />}
+        {view.kind === "country" && <CountryView name={view.name} />}
       </main>
 
       <Footer />

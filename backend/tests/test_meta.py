@@ -14,12 +14,6 @@ def test_document_types(client, seeded):
     assert codes == {"EXHIBIT_AB"}
 
 
-def test_countries(client, seeded):
-    resp = client.get("/api/countries")
-    assert resp.status_code == 200
-    assert resp.json() == [{"country_name": "ICELAND"}]
-
-
 def test_meta_reports_coverage_and_data_as_of(client, seeded):
     resp = client.get("/api/meta")
     assert resp.status_code == 200

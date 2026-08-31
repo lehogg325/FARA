@@ -4,7 +4,7 @@ import click
 
 from fara_normalize.db import get_connection
 from fara_normalize.load import NoVerifiedArchiveError, load_dataset
-from fara_normalize.load_dimensions import load_countries, load_document_types, load_jurisdictions
+from fara_normalize.load_dimensions import load_countries, load_document_types, load_jurisdictions, load_topics
 from fara_normalize.migrate import migrate
 
 
@@ -32,10 +32,11 @@ def load_dimensions_cmd() -> None:
         j = load_jurisdictions(conn)
         d = load_document_types(conn)
         c = load_countries(conn)
+        t = load_topics(conn)
         conn.commit()
     finally:
         conn.close()
-    click.echo(f"jurisdictions={j} document_types={d} countries={c}")
+    click.echo(f"jurisdictions={j} document_types={d} countries={c} topics={t}")
 
 
 @main.command(name="load")
