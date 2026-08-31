@@ -2,17 +2,23 @@
 
 ## Architecture
 
-- **Postgres**: Supabase (hosted). Ingest/normalize/extract write directly to it — no
-  dump/restore step — using a write-capable role over the **direct** connection (port
-  `5432`). The backend API reads through Supabase's **transaction-mode connection
-  pooler** (port `6543`) using a separate, read-only role, since a serverless function
-  opens many short-lived connections that a direct connection isn't sized for.
-  `backend/src/fara_backend/db.py` sets `prepare_threshold=None` for exactly this
-  reason: psycopg3's server-side prepared statements don't survive PgBouncer
-  transaction pooling handing out a different backend connection per statement —
-  without this, the API would intermittently fail with "prepared statement does not
-  exist" under load. `fara-normalize`/`fara-extract` should keep using the direct
-  connection — they run multi-statement transactions the pooler isn't meant for.
+- **Postgres**: Supabase (hosted). **Correction from real testing (2026-08-31)**: Supabase's
+  direct-connection host (`db.<ref>.supabase.co:5432`) resolves to an IPv6-only DNS
+  record — confirmed via `dig` (`AAAA` present, no `A` record) and a real failed
+  connection attempt. GitHub Actions runners have no IPv6 egress, so the direct
+  connection is a non-starter for the scheduled workflows regardless of what works on
+  any given local machine. Ingest/normalize/extract instead use Supabase's **session
+  pooler** (IPv4-compatible, one dedicated backend connection per client session — full
+  session/prepared-statement support, which Supabase itself recommends for scripts, CI,
+  and tools making occasional connections). The backend API uses the separate
+  **transaction-mode pooler** (port `6543`, also IPv4-compatible) with a read-only role,
+  sized for a serverless function's many short-lived connections.
+  `backend/src/fara_backend/db.py` sets `prepare_threshold=None` for exactly this reason:
+  psycopg3's server-side prepared statements don't survive PgBouncer transaction pooling
+  handing out a different backend connection per statement — without this, the API would
+  intermittently fail with "prepared statement does not exist" under load. The session
+  pooler doesn't have this problem (session-level, not transaction-level), so
+  `fara-normalize`/`fara-extract` don't need the same workaround.
 - **Object storage**: Cloudflare R2 (S3-compatible, no egress fees) holds the raw bulk
   CSVs (`fara/bulk/...`) and every downloaded filing PDF (`fara/docs/...`), plus the
   ingest manifest (`manifest/manifest.sqlite3`) so the GitHub Actions runners — which
@@ -38,8 +44,11 @@ None of this can be scripted from here — it needs your accounts and API tokens
    (`GRANT SELECT ON ALL TABLES IN SCHEMA public TO fara_read;` after the first
    `fara-normalize migrate` has created the tables — re-run the grant after future
    migrations that add tables, or set a default-privilege grant so new tables inherit it).
-3. Grab two connection strings from Database → Connection string:
-   - **Direct** (port `5432`) — becomes the `DATABASE_URL` secret for the ingest workflows.
+3. Grab two connection strings from Database → Connect (**not** the plain "Direct
+   connection" string — it's IPv6-only and won't work from GitHub Actions or most
+   local networks, confirmed 2026-08-31):
+   - **Session pooler** — becomes the `DATABASE_URL` secret for the ingest workflows
+     (`ingest-bulk.yml`, `docs-and-extract.yml`).
    - **Transaction pooler** (port `6543`) — becomes the `DATABASE_URL` env var on Vercel,
      using the read-only role.
 4. Postgres version: this project's local `docker-compose.yml` is pinned to 17 to match
@@ -56,20 +65,20 @@ None of this can be scripted from here — it needs your accounts and API tokens
 
 ### 3. GitHub repository + secrets
 
-1. This directory isn't a git repo yet — `git init`, commit, and push to a new GitHub
-   repo before any workflow can run (scheduled workflows only fire on the default branch).
-2. Repo Settings → Secrets and variables → Actions, add:
-   `DATABASE_URL` (Supabase **direct** connection string), `FARA_R2_BUCKET`,
-   `FARA_R2_ENDPOINT_URL`, `FARA_R2_ACCESS_KEY_ID`, `FARA_R2_SECRET_ACCESS_KEY`,
-   `ANTHROPIC_API_KEY` (docs-and-extract.yml only).
+Repo: [github.com/lehogg325/FARA](https://github.com/lehogg325/FARA) (public, pushed
+2026-08-31). Repo Settings → Secrets and variables → Actions, add:
+`DATABASE_URL` (Supabase **session pooler** connection string — not the plain "Direct
+connection" one, see above), `FARA_R2_BUCKET`, `FARA_R2_ENDPOINT_URL`,
+`FARA_R2_ACCESS_KEY_ID`, `FARA_R2_SECRET_ACCESS_KEY`, `ANTHROPIC_API_KEY`
+(docs-and-extract.yml only).
 
 ### 4. Vercel
 
 1. Import the repo, set the **root directory to `backend/`** (it has its own
    `vercel.json`/`requirements.txt`/`api/index.py`) so the rest of the uv workspace
    isn't part of the deployed function.
-2. Project → Settings → Environment Variables: `DATABASE_URL` (Supabase **pooler**
-   connection string, read-only role).
+2. Project → Settings → Environment Variables: `DATABASE_URL` (Supabase **transaction
+   pooler** connection string, read-only role).
 3. Deploy. `GET /api/health` should return `{"status": "ok"}`.
 
 ## Local dev vs. production
