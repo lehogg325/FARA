@@ -100,6 +100,16 @@ def search_documents(
     return Page(items=[DocumentSearchResult(**r) for r in rows], total=total, limit=limit, offset=offset)
 
 
+# Registered ahead of /{registrant_doc_id}/text and /fields is unnecessary (those
+# have an extra path segment), but this bare route must still come after /search
+# above — otherwise FastAPI would try to parse "search" as this route's int param.
+@router.get("/{registrant_doc_id}", response_model=RegistrantDoc)
+def get_document(
+    registrant_doc_id: int, jurisdiction: str = Query("fara"), conn: psycopg.Connection = Depends(get_db)
+) -> RegistrantDoc:
+    return RegistrantDoc(**_get_doc_or_404(conn, jurisdiction, registrant_doc_id))
+
+
 @router.get("/{registrant_doc_id}/text", response_model=DocumentText)
 def get_document_text(
     registrant_doc_id: int, jurisdiction: str = Query("fara"), conn: psycopg.Connection = Depends(get_db)

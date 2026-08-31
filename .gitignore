@@ -11,3 +11,5 @@ build/
 .vercel/
 *.log
 .claude/
+node_modules/
+*.tsbuildinfo

@@ -1,0 +1,190 @@
+// Typed wrappers over the FARA backend API. All data comes from our own
+// Postgres (mined from efile.fara.gov) — the browser never talks to FARA directly.
+
+export interface Page<T> {
+  items: T[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export type EntityType = "registrant" | "foreign_principal" | "short_form_registrant";
+
+export interface SearchResult {
+  entity_type: EntityType;
+  entity_id: number;
+  label: string;
+  detail: string | null;
+  registration_number: number;
+}
+
+export interface RegistrantSummary {
+  registrant_id: number;
+  jurisdiction: string;
+  registration_number: number;
+  name: string;
+  business_name: string | null;
+  city: string | null;
+  state: string | null;
+  status: "active" | "terminated";
+  registration_date: string | null;
+  termination_date: string | null;
+}
+
+export interface RegistrantDetail extends RegistrantSummary {
+  address_1: string | null;
+  address_2: string | null;
+  zip: string | null;
+  foreign_principal_count: number;
+  short_form_registrant_count: number;
+  document_count: number;
+}
+
+export interface ShortFormRegistrant {
+  short_form_registrant_id: number;
+  jurisdiction: string;
+  parent_registrant_id: number;
+  parent_registration_number: number;
+  last_name: string | null;
+  first_name: string | null;
+  short_form_date: string | null;
+  termination_date: string | null;
+}
+
+export interface ForeignPrincipal {
+  foreign_principal_id: number;
+  jurisdiction: string;
+  registrant_id: number;
+  registration_number: number;
+  foreign_principal_name: string;
+  country_raw: string | null;
+  city: string | null;
+  state: string | null;
+  registration_date: string | null;
+  termination_date: string | null;
+}
+
+export interface ForeignPrincipalByNameGroup {
+  foreign_principal_name: string;
+  country_raw: string | null;
+  registrant_count: number;
+  registrants: RegistrantSummary[];
+}
+
+export interface RegistrantDoc {
+  registrant_doc_id: number;
+  jurisdiction: string;
+  registrant_id: number;
+  registration_number: number;
+  date_stamped: string | null;
+  document_type_code: string | null;
+  document_type_raw_label: string;
+  short_form_name: string | null;
+  foreign_principal_name: string | null;
+  foreign_principal_country_raw: string | null;
+  url: string | null;
+  url_available: boolean;
+  pdf_object_key: string | null;
+  pdf_byte_size: number | null;
+  pdf_downloaded_at: string | null;
+}
+
+export interface DocumentText {
+  registrant_doc_id: number;
+  extracted_text: string;
+  extraction_method: "native" | "ocr" | "mixed";
+  page_count: number | null;
+  char_count: number | null;
+  quality_flag: "ok" | "low_confidence" | "failed";
+  extractor_version: string;
+  extracted_at: string;
+}
+
+export interface ExtractedField {
+  document_extracted_field_id: number;
+  registrant_doc_id: number;
+  field_key: string;
+  field_value_text: string | null;
+  field_value_numeric: number | null;
+  field_value_date: string | null;
+  source_page: number | null;
+  extraction_method: "rule" | "llm";
+  extractor_version: string;
+  confidence: number | null;
+  extracted_at: string;
+}
+
+export interface DocumentSearchResult {
+  registrant_doc_id: number;
+  registration_number: number;
+  document_type_raw_label: string;
+  date_stamped: string | null;
+  snippet: string;
+}
+
+export interface DocumentType {
+  document_type_code: string;
+  document_type_label: string;
+}
+
+export interface DatasetStatus {
+  dataset: string;
+  snapshot_date: string;
+  loaded_row_count: number;
+  status: string;
+  finished_at: string | null;
+}
+
+export interface ExtractionCoverage {
+  stage: string;
+  succeeded_count: number;
+  eligible_count: number;
+}
+
+export interface Meta {
+  jurisdiction: string;
+  data_as_of: string | null;
+  datasets: DatasetStatus[];
+  extraction_coverage: ExtractionCoverage[];
+}
+
+async function get<T>(url: string, signal?: AbortSignal): Promise<T> {
+  const r = await fetch(url, { signal });
+  if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
+  return r.json() as Promise<T>;
+}
+
+const qs = (params: Record<string, string | number | undefined>): string => {
+  const search = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== "") search.set(k, String(v));
+  }
+  const s = search.toString();
+  return s ? `?${s}` : "";
+};
+
+export const api = {
+  meta: () => get<Meta>("/api/meta"),
+  documentTypes: () => get<DocumentType[]>("/api/document-types"),
+
+  search: (q: string, type?: EntityType, signal?: AbortSignal) =>
+    get<SearchResult[]>(`/api/search${qs({ q, type, limit: 15 })}`, signal),
+
+  registrant: (id: number) => get<RegistrantDetail>(`/api/registrants/${id}`),
+  registrantForeignPrincipals: (id: number, offset = 0, limit = 25) =>
+    get<Page<ForeignPrincipal>>(`/api/registrants/${id}/foreign-principals${qs({ offset, limit })}`),
+  registrantShortForms: (id: number, offset = 0, limit = 25) =>
+    get<Page<ShortFormRegistrant>>(`/api/registrants/${id}/short-form-registrants${qs({ offset, limit })}`),
+  registrantDocuments: (id: number, offset = 0, limit = 25) =>
+    get<Page<RegistrantDoc>>(`/api/registrants/${id}/documents${qs({ offset, limit })}`),
+
+  foreignPrincipal: (id: number) => get<ForeignPrincipal>(`/api/foreign-principals/${id}`),
+  foreignPrincipalsByName: (name: string, country?: string) =>
+    get<ForeignPrincipalByNameGroup[]>(`/api/foreign-principals/by-name${qs({ name, country })}`),
+
+  document: (id: number) => get<RegistrantDoc>(`/api/documents/${id}`),
+  documentText: (id: number) => get<DocumentText>(`/api/documents/${id}/text`),
+  documentFields: (id: number) => get<ExtractedField[]>(`/api/documents/${id}/fields`),
+  documentSearch: (q: string, offset = 0, limit = 25) =>
+    get<Page<DocumentSearchResult>>(`/api/documents/search${qs({ q, offset, limit })}`),
+};

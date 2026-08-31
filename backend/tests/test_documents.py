@@ -15,6 +15,20 @@ def test_list_documents_filters_by_document_type(client, seeded):
     assert resp.json()["total"] == 0
 
 
+def test_get_document(client, seeded):
+    resp = client.get(f"/api/documents/{seeded['registrant_doc_id']}")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["registration_number"] == 5870
+    assert body["document_type_raw_label"] == "Exhibit AB"
+    assert body["url"] == "https://efile.fara.gov/docs/5870-Exhibit-AB-20260813-2.pdf"
+
+
+def test_get_document_404_for_unknown_document(client, seeded):
+    resp = client.get("/api/documents/999999")
+    assert resp.status_code == 404
+
+
 def test_get_document_text(client, seeded):
     resp = client.get(f"/api/documents/{seeded['registrant_doc_id']}/text")
     assert resp.status_code == 200
