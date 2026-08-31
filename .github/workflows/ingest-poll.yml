@@ -1,0 +1,32 @@
+name: ingest-poll
+
+# Every few hours: poll the two working JSON endpoints and archive the raw
+# response verbatim. Diagnostic only — never loads into Postgres (that's
+# ingest-bulk's job) — so this needs R2 credentials but no DATABASE_URL.
+on:
+  schedule:
+    - cron: "0 */4 * * *" # every 4 hours
+  workflow_dispatch: {}
+
+env:
+  FARA_R2_BUCKET: ${{ secrets.FARA_R2_BUCKET }}
+  FARA_R2_ENDPOINT_URL: ${{ secrets.FARA_R2_ENDPOINT_URL }}
+  FARA_R2_ACCESS_KEY_ID: ${{ secrets.FARA_R2_ACCESS_KEY_ID }}
+  FARA_R2_SECRET_ACCESS_KEY: ${{ secrets.FARA_R2_SECRET_ACCESS_KEY }}
+
+jobs:
+  ingest-poll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - run: uv python install 3.12
+      - run: uv sync --package fara-ingest
+
+      - name: Poll Active/Terminated JSON endpoints
+        run: uv run fara-ingest poll

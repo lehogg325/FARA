@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: fara
+      POSTGRES_PASSWORD: fara
+      POSTGRES_DB: fara
+    ports:
+      - "5434:5432"
+    volumes:
+      - fara_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  fara_postgres_data:

@@ -1,0 +1,64 @@
+name: docs-and-extract
+
+# Weekly: download filing PDFs and mine them — text/OCR, then rule-based
+# fields, then LLM-assisted fields. Always the default `new` mode in every
+# command below: only documents filed/discovered since the last successful
+# run. The ~154K pre-existing historical documents are never touched here —
+# that's `--mode backfill`, run manually, never by this schedule
+# (docs/deploy.md).
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Monday 06:00 UTC
+  workflow_dispatch: {}
+
+env:
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  FARA_R2_BUCKET: ${{ secrets.FARA_R2_BUCKET }}
+  FARA_R2_ENDPOINT_URL: ${{ secrets.FARA_R2_ENDPOINT_URL }}
+  FARA_R2_ACCESS_KEY_ID: ${{ secrets.FARA_R2_ACCESS_KEY_ID }}
+  FARA_R2_SECRET_ACCESS_KEY: ${{ secrets.FARA_R2_SECRET_ACCESS_KEY }}
+  AWS_ACCESS_KEY_ID: ${{ secrets.FARA_R2_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.FARA_R2_SECRET_ACCESS_KEY }}
+  FARA_INGEST_MANIFEST_PATH: data/manifest.sqlite3
+
+jobs:
+  docs-and-extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install OCR system dependencies
+        run: sudo apt-get update && sudo apt-get install -y poppler-utils tesseract-ocr
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - run: uv python install 3.12
+      - run: uv sync --all-packages
+
+      - name: Restore ingest manifest from R2
+        run: |
+          mkdir -p data
+          aws s3 cp "s3://$FARA_R2_BUCKET/manifest/manifest.sqlite3" data/manifest.sqlite3 \
+            --endpoint-url "$FARA_R2_ENDPOINT_URL" || echo "no manifest in R2 yet — starting fresh"
+
+      - name: Download newly-filed PDFs
+        run: uv run fara-ingest docs --mode new
+
+      - name: Extract text (native + OCR)
+        run: uv run fara-extract text --mode new
+
+      - name: Rule-based structured fields
+        run: uv run fara-extract fields-rules --mode new
+
+      - name: LLM-assisted narrative fields
+        run: uv run fara-extract fields-llm --mode new
+
+      - name: Save ingest manifest to R2
+        if: always()
+        run: |
+          aws s3 cp data/manifest.sqlite3 "s3://$FARA_R2_BUCKET/manifest/manifest.sqlite3" \
+            --endpoint-url "$FARA_R2_ENDPOINT_URL"

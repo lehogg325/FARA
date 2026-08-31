@@ -1,0 +1,72 @@
+name: ingest-bulk
+
+# Daily: download all 4 bulk CSVs, load them into Postgres, cross-check the
+# bulk registrant count against a live JSON poll. Runs unattended — no
+# --backfill anywhere in this workflow (docs/deploy.md: historical backfill
+# is a separate, manual operation, never scheduled).
+on:
+  schedule:
+    - cron: "0 5 * * *" # 05:00 UTC daily
+  workflow_dispatch: {}
+
+env:
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  FARA_R2_BUCKET: ${{ secrets.FARA_R2_BUCKET }}
+  FARA_R2_ENDPOINT_URL: ${{ secrets.FARA_R2_ENDPOINT_URL }}
+  FARA_R2_ACCESS_KEY_ID: ${{ secrets.FARA_R2_ACCESS_KEY_ID }}
+  FARA_R2_SECRET_ACCESS_KEY: ${{ secrets.FARA_R2_SECRET_ACCESS_KEY }}
+  AWS_ACCESS_KEY_ID: ${{ secrets.FARA_R2_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.FARA_R2_SECRET_ACCESS_KEY }}
+  FARA_INGEST_MANIFEST_PATH: data/manifest.sqlite3
+
+jobs:
+  ingest-bulk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - run: uv python install 3.12
+      - run: uv sync --all-packages
+
+      - name: Restore ingest manifest from R2
+        run: |
+          mkdir -p data
+          aws s3 cp "s3://$FARA_R2_BUCKET/manifest/manifest.sqlite3" data/manifest.sqlite3 \
+            --endpoint-url "$FARA_R2_ENDPOINT_URL" || echo "no manifest in R2 yet — starting fresh"
+
+      - name: Download bulk datasets
+        run: uv run fara-ingest bulk
+
+      - name: Apply schema migrations
+        run: uv run fara-normalize migrate
+
+      - name: Seed dimension tables
+        run: uv run fara-normalize load-dimensions
+
+      - name: Load registrants
+        run: uv run fara-normalize load --dataset registrants
+
+      - name: Load foreign principals
+        run: uv run fara-normalize load --dataset foreign_principals
+
+      - name: Load short-form registrants
+        run: uv run fara-normalize load --dataset short_forms
+
+      - name: Load registrant documents
+        run: uv run fara-normalize load --dataset registrant_docs
+
+      # Always persist the manifest's new state, even if a later step (verify)
+      # fails — the bulk download + normalize load already happened for real.
+      - name: Save ingest manifest to R2
+        if: always()
+        run: |
+          aws s3 cp data/manifest.sqlite3 "s3://$FARA_R2_BUCKET/manifest/manifest.sqlite3" \
+            --endpoint-url "$FARA_R2_ENDPOINT_URL"
+
+      - name: Cross-check against live JSON poll
+        run: uv run fara-ingest verify

@@ -1,0 +1,513 @@
+{
+  "REGISTRANTS_TERMINATED": {
+    "ROW": [
+      {
+        "Zip": 20817,
+        "Address_1": "8308 Lilly Stone Drive",
+        "State": "MD",
+        "Registration_Date": "05/12/2025",
+        "Termination_Date": "05/31/2026",
+        "City": "Bethesda",
+        "Registration_Number": 7589,
+        "Name": "Osio, Gustavo Antonio Garcia"
+      },
+      {
+        "Address_1": "40 Homewood Avenue",
+        "Address_2": "Suite 2703",
+        "Registration_Date": "12/06/2021",
+        "Termination_Date": "05/28/2026",
+        "City": "Toronto",
+        "Registration_Number": 7053,
+        "Name": "Harris, Waheeda"
+      },
+      {
+        "Zip": 22066,
+        "Address_1": "74 Windy Hollow Court",
+        "State": "VA",
+        "Registration_Date": "08/01/2023",
+        "Termination_Date": "05/05/2026",
+        "City": "Great Falls",
+        "Registration_Number": 7302,
+        "Name": "MEDSecurean, LLC"
+      },
+      {
+        "Zip": 55437,
+        "Address_1": "9109 Poplar Bridge Rd",
+        "State": "MN",
+        "Registration_Date": "12/16/2018",
+        "Termination_Date": "05/05/2026",
+        "City": "Minneapolis",
+        "Registration_Number": 6614,
+        "Name": "National Salvation Front (NAS) Mission USA"
+      },
+      {
+        "Zip": 33131,
+        "Address_1": "333 SE 2d Avenue",
+        "Address_2": "Suite 2810",
+        "State": "FL",
+        "Registration_Date": "05/28/2025",
+        "Termination_Date": "05/01/2026",
+        "City": "Miami",
+        "Registration_Number": 7600,
+        "Name": "Tactic COC LLC"
+      },
+      {
+        "Zip": 20004,
+        "Address_1": "1201 Pennsylvania Avenue, NW",
+        "Address_2": "Suite 800",
+        "State": "DC",
+        "Registration_Date": "04/07/2025",
+        "Termination_Date": "04/30/2026",
+        "City": "Washington",
+        "Registration_Number": 7568,
+        "Name": "Williams & Jensen, PLLC"
+      },
+      {
+        "Zip": 11580,
+        "Address_1": "39 South Central Avenue",
+        "State": "NY",
+        "Registration_Date": "12/28/2023",
+        "Termination_Date": "04/23/2026",
+        "City": "Valley Stream",
+        "Registration_Number": 7356,
+        "Name": "Qureshi, Muhammad Safdar"
+      },
+      {
+        "Zip": 10031,
+        "Address_1": "3333 Broadway, Apt D12D",
+        "State": "NY",
+        "Registration_Date": "05/16/2020",
+        "Termination_Date": "04/23/2026",
+        "City": "New York",
+        "Registration_Number": 6823,
+        "Name": "Federacion De Alcades Pedaneo"
+      },
+      {
+        "Zip": 52240,
+        "Address_1": "1958 Broadway Street",
+        "Address_2": "#5B",
+        "State": "IA",
+        "Registration_Date": "04/28/2021",
+        "Termination_Date": "04/23/2026",
+        "City": "Iowa City",
+        "Registration_Number": 6950,
+        "Name": "Abandelwa, Jacques"
+      },
+      {
+        "Address_1": "17, Avenue Hoche",
+        "Registration_Date": "11/23/2022",
+        "Termination_Date": "04/23/2026",
+        "City": "Paris",
+        "Registration_Number": 7194,
+        "Name": "35 Nord"
+      },
+      {
+        "Zip": 20036,
+        "Address_1": "2021 L Street, NW",
+        "Address_2": "Suite 101-340",
+        "State": "DC",
+        "Registration_Date": "03/31/2017",
+        "Termination_Date": "04/21/2026",
+        "City": "Washington",
+        "Registration_Number": 6412,
+        "Name": "Capitol Media Group"
+      },
+      {
+        "Zip": 35071,
+        "Address_1": "1284 Mountain Lane",
+        "State": "AL",
+        "Registration_Date": "04/12/2021",
+        "Termination_Date": "04/21/2026",
+        "City": "Gardendale",
+        "Registration_Number": 6947,
+        "Name": "Welch, Ba-Shen"
+      },
+      {
+        "Zip": 34202,
+        "Address_1": "8429 Lorraine Rd #368",
+        "State": "FL",
+        "Registration_Date": "03/11/2025",
+        "Termination_Date": "03/31/2026",
+        "City": "Lakewood Ranch",
+        "Registration_Number": 7555,
+        "Name": "Liberty International Group LLC"
+      },
+      {
+        "Zip": 22201,
+        "Address_1": "Navy League Building, 2300 Wilson Boulevard Suite #700",
+        "State": "VA",
+        "Registration_Date": "12/15/2025",
+        "Termination_Date": "03/20/2026",
+        "City": "Arlington",
+        "Registration_Number": 7678,
+        "Name": "Arsenal Government and Public Affairs Group"
+      },
+      {
+        "Zip": "94111-2228",
+        "Address_1": "Four Embarcadero Center",
+        "Address_2": "22nd Floor",
+        "State": "CA",
+        "Registration_Date": "07/31/1997",
+        "Termination_Date": "03/12/2026",
+        "City": "San Francisco",
+        "Registration_Number": 5198,
+        "Name": "Pillsbury Winthrop Shaw Pittman, LLP"
+      },
+      {
+        "Zip": 77077,
+        "Address_1": "1293 Eldridge Parkway",
+        "State": "TX",
+        "Registration_Date": "08/20/2021",
+        "Termination_Date": "03/02/2026",
+        "City": "Houston",
+        "Registration_Number": 6996,
+        "Name": "CITGO Petroleum Corporation (CPC)"
+      },
+      {
+        "Zip": 92653,
+        "Address_1": "23046 Avenida De La Carlota",
+        "Address_2": "Suite 600",
+        "State": "CA",
+        "Registration_Date": "02/28/2025",
+        "Termination_Date": "02/28/2026",
+        "City": "Laguna Hills",
+        "Registration_Number": 7549,
+        "Name": "Beni Productions LLC"
+      },
+      {
+        "Zip": "07417",
+        "Address_1": "501 Mortimer Court",
+        "State": "NJ",
+        "Registration_Date": "02/04/2025",
+        "Termination_Date": "02/28/2026",
+        "City": "Franklin Lakes",
+        "Registration_Number": 7533,
+        "Name": "Ajjan Associates LLC"
+      },
+      {
+        "Zip": "07666",
+        "Address_1": "500 Frank W. Burr Blvd,",
+        "State": "NJ",
+        "Registration_Date": "09/16/2025",
+        "Termination_Date": "02/19/2026",
+        "City": "Teaneck",
+        "Registration_Number": 7643,
+        "Name": "Univision Networks & Studios, Inc. (\"UN&S\")"
+      },
+      {
+        "Zip": 20002,
+        "Address_1": "201 Massachusetts Avenue, NE",
+        "Address_2": "Suite C-5",
+        "State": "DC",
+        "Registration_Date": "05/11/2021",
+        "Termination_Date": "02/15/2026",
+        "City": "Washington",
+        "Registration_Number": 6960,
+        "Name": "McCollum, Jonathan"
+      },
+      {
+        "Zip": 20024,
+        "Address_1": "425 3rd Street, SW",
+        "Address_2": "Suite 1250",
+        "State": "DC",
+        "Registration_Date": "03/25/2016",
+        "Termination_Date": "02/02/2026",
+        "City": "Washington",
+        "Registration_Number": 6344,
+        "Name": "Livingston Group, LLC"
+      },
+      {
+        "Zip": 98668,
+        "Address_1": "P.O. Box 5076",
+        "State": "WA",
+        "Registration_Date": "02/28/2025",
+        "Termination_Date": "01/31/2026",
+        "City": "Vancouver",
+        "Registration_Number": 7551,
+        "Name": "National Consulting Services, Inc."
+      },
+      {
+        "Zip": 20006,
+        "Address_1": "1717 K Street, NW",
+        "Address_2": "Suite 900",
+        "State": "DC",
+        "Registration_Date": "11/14/2019",
+        "Termination_Date": "01/20/2026",
+        "City": "Washington",
+        "Registration_Number": 6750,
+        "Name": "Mac, Andrew"
+      },
+      {
+        "Zip": "06248",
+        "Address_1": "2 Olde Hall Road",
+        "State": "CT",
+        "Registration_Date": "11/19/2025",
+        "Termination_Date": "01/12/2026",
+        "City": "Hebron",
+        "Registration_Number": 7669,
+        "Name": "Universal Strategies Limited"
+      },
+      {
+        "Zip": 20036,
+        "Address_1": "1310 19th Street, NW",
+        "State": "DC",
+        "Registration_Date": "06/29/2020",
+        "Termination_Date": "01/01/2026",
+        "City": "Washington",
+        "Registration_Number": 6842,
+        "Name": "Saltzman & Evinch, PLLC"
+      },
+      {
+        "Zip": 20006,
+        "Address_1": "1667 K Street, NW",
+        "Address_2": "Suite 800",
+        "State": "DC",
+        "Registration_Date": "07/21/2008",
+        "Termination_Date": "01/01/2026",
+        "City": "Washington",
+        "Registration_Number": 5874,
+        "Name": "Gephardt Group Government Affairs, LLC"
+      },
+      {
+        "Zip": 80522,
+        "Address_1": "Juneau & Mitchell Attn: Sean Follin Encounter Strategies",
+        "Address_2": "PO Box A",
+        "State": "CO",
+        "Registration_Date": "08/14/2025",
+        "Termination_Date": "12/31/2025",
+        "City": "Fort Collins",
+        "Registration_Number": 7635,
+        "Name": "Follin and Associates LLC (DBA Encounter Strategies)"
+      },
+      {
+        "Zip": 10025,
+        "Address_1": "755 W End Ave, 4A",
+        "State": "NY",
+        "Registration_Date": "09/26/2024",
+        "Termination_Date": "12/31/2025",
+        "City": "New York",
+        "Registration_Number": 7469,
+        "Name": "Sheinkopf, Hank"
+      },
+      {
+        "Address_1": "537, Haeansaneop-ro, Sanam-myeon, Sacheon-si,",
+        "Registration_Date": "08/12/2024",
+        "Termination_Date": "12/31/2025",
+        "City": "Gyeongsangnam-do",
+        "Registration_Number": 7441,
+        "Name": "Kim, Hyun Dae"
+      },
+      {
+        "Zip": 34145,
+        "Address_1": "237 Geranium Court",
+        "State": "FL",
+        "Registration_Date": "05/31/2023",
+        "Termination_Date": "12/31/2025",
+        "City": "Marco Island",
+        "Registration_Number": 7280,
+        "Name": "Ambassador Hugo Llorens and Global Partners LLC"
+      },
+      {
+        "Zip": 48154,
+        "Address_1": "14900 Lyons Street",
+        "State": "MI",
+        "Registration_Date": "06/06/2025",
+        "Termination_Date": "12/31/2025",
+        "City": "Livonia",
+        "Registration_Number": 7608,
+        "Name": "Gilley's Fastener Sales and Consulting LLC"
+      },
+      {
+        "Zip": 80920,
+        "Address_1": "3849 Cottage Drive",
+        "State": "CO",
+        "Registration_Date": "02/13/2025",
+        "Termination_Date": "12/28/2025",
+        "City": "Colorado Springs",
+        "Registration_Number": 7539,
+        "Name": "Hannan, Daniel D."
+      },
+      {
+        "Address_1": "Index Tower (East Tower), Unit 1703",
+        "Address_2": "Al Mustaqbal Street, DIFC",
+        "Registration_Date": "12/08/2025",
+        "Termination_Date": "12/09/2025",
+        "City": "Dubai",
+        "Registration_Number": 7675,
+        "Name": "VEON Ltd."
+      },
+      {
+        "Zip": 20007,
+        "Address_1": "1010 Wisconsin Avenue, NW",
+        "Address_2": "Suite 710",
+        "State": "DC",
+        "Registration_Date": "05/26/2025",
+        "Termination_Date": "11/19/2025",
+        "City": "Washington",
+        "Registration_Number": 7598,
+        "Name": "Forward Global US, Inc."
+      },
+      {
+        "Zip": 20005,
+        "Address_1": "1300 I Street, NW",
+        "Address_2": "Suite 400E",
+        "State": "DC",
+        "Registration_Date": "01/21/2021",
+        "Termination_Date": "11/01/2025",
+        "City": "Washington",
+        "Registration_Number": 6912,
+        "Name": "Kashmir Action Network, LLC"
+      },
+      {
+        "Zip": 20010,
+        "Address_1": "3636 16th Street, NW",
+        "Address_2": "Suite B260",
+        "State": "DC",
+        "Registration_Date": "01/20/2021",
+        "Termination_Date": "11/01/2025",
+        "City": "Washington",
+        "Registration_Number": 6911,
+        "Name": "Chinar Consulting, LLC"
+      },
+      {
+        "Zip": 20004,
+        "Address_1": "1275 Pennsylvania Avenue NW, Suite 800",
+        "State": "DC",
+        "Registration_Date": "10/28/2024",
+        "Termination_Date": "10/31/2025",
+        "City": "Washington",
+        "Registration_Number": 7483,
+        "Name": "Precision Strategies, LLC"
+      },
+      {
+        "Zip": 60033,
+        "Address_1": "2001 N. Division Street",
+        "State": "IL",
+        "Registration_Date": "04/14/2025",
+        "Termination_Date": "10/31/2025",
+        "City": "Harvard",
+        "Registration_Number": 7573,
+        "Name": "Todoroki, John"
+      },
+      {
+        "Zip": 20001,
+        "Address_1": "750 9th Street Suite 650",
+        "State": "DC",
+        "Registration_Date": "10/01/2024",
+        "Termination_Date": "10/31/2025",
+        "City": "Washington",
+        "Registration_Number": 7472,
+        "Name": "Venn Strategies"
+      },
+      {
+        "Zip": 30097,
+        "Address_1": "6000 Respite Ct.",
+        "State": "GA",
+        "Registration_Date": "06/12/2024",
+        "Termination_Date": "10/31/2025",
+        "City": "Johns Creek",
+        "Registration_Number": 7419,
+        "Name": "Cholakian, A. Egon"
+      },
+      {
+        "Zip": 10013,
+        "Address_1": "200 Hudson Street",
+        "State": "NY",
+        "Registration_Date": "04/08/2022",
+        "Termination_Date": "10/31/2025",
+        "City": "New York",
+        "Registration_Number": 7106,
+        "Name": "Havas Media Group USA LLC"
+      },
+      {
+        "Address_1": "537, Haeansaneop-ro, Sanam-myeon, Sacheon-si",
+        "Registration_Date": "07/29/2024",
+        "Termination_Date": "10/24/2025",
+        "City": "Gyeongsangnam-do",
+        "Registration_Number": 7436,
+        "Name": "Lee, John"
+      },
+      {
+        "Zip": 33432,
+        "Address_1": "433 Plaza Real",
+        "Address_2": "Suite 275",
+        "State": "FL",
+        "Registration_Date": "04/25/2025",
+        "Termination_Date": "10/08/2025",
+        "City": "Boca Raton",
+        "Registration_Number": 7579,
+        "Name": "Javelin Advisors LLC"
+      },
+      {
+        "Zip": 10001,
+        "Address_1": "322 8th Avenue, Suite 1200",
+        "State": "NY",
+        "Registration_Date": "04/10/2025",
+        "Termination_Date": "10/08/2025",
+        "City": "New York",
+        "Registration_Number": 7570,
+        "Name": "Seiden Law LLP"
+      },
+      {
+        "Zip": 22101,
+        "Address_1": "1317 Kirby Road",
+        "State": "VA",
+        "Registration_Date": "03/17/2025",
+        "Termination_Date": "09/30/2025",
+        "City": "McLean",
+        "Registration_Number": 7556,
+        "Name": "ASG Corp."
+      },
+      {
+        "Zip": 20004,
+        "Address_1": "633 Pennsylvania Avenue, NW",
+        "State": "DC",
+        "Registration_Date": "10/19/2024",
+        "Termination_Date": "09/23/2025",
+        "City": "Washington",
+        "Registration_Number": 7477,
+        "Name": "Team Eagle Consulting, LLC"
+      },
+      {
+        "Zip": 22314,
+        "Address_1": "520 North Washington Street",
+        "State": "VA",
+        "Registration_Date": "10/19/2018",
+        "Termination_Date": "09/18/2025",
+        "City": "Alexandria",
+        "Registration_Number": 6602,
+        "Name": "Corallo Media Strategies, Inc"
+      },
+      {
+        "Zip": 60606,
+        "Address_1": "227 West Monroe Street",
+        "State": "IL",
+        "Registration_Date": "08/08/2024",
+        "Termination_Date": "08/31/2025",
+        "City": "Chicago",
+        "Registration_Number": 7439,
+        "Name": "A.T. Kearney, Inc."
+      },
+      {
+        "Zip": "04104",
+        "Address_1": "PO Box 878",
+        "State": "ME",
+        "Registration_Date": "08/13/2025",
+        "Termination_Date": "08/13/2025",
+        "City": "Portland",
+        "Registration_Number": 7634,
+        "Name": "Independence Front For Freedom And Peace"
+      },
+      {
+        "Zip": 20002,
+        "Address_1": "1223 F St. NE Unit B,",
+        "State": "DC",
+        "Registration_Date": "01/22/2025",
+        "Termination_Date": "08/01/2025",
+        "City": "Washington",
+        "Registration_Number": 7525,
+        "Name": "The Color Nine Group LLC"
+      }
+    ]
+  }
+}
