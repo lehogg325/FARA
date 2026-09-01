@@ -1,7 +1,8 @@
 import Graph from "graphology";
 import forceAtlas2 from "graphology-layout-forceatlas2";
-import { useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Sigma } from "sigma";
+import { EdgeArrowProgram } from "sigma/rendering";
 import { api, type CountryGraph, type GraphEdge, type GraphNode, type GraphNodeType } from "../api/client";
 import { useStore } from "../state/store";
 
@@ -11,6 +12,15 @@ const NODE_COLOR: Record<GraphNodeType, string> = {
   contact: "#ffa300",
   recipient: "#263d6b",
 };
+
+const LEGEND_LABEL: Record<GraphNodeType, string> = {
+  foreign_principal: "Foreign principal",
+  registrant: "Registrant — size = activity, click to expand",
+  contact: "Contact — size = mentions",
+  recipient: "Contribution recipient — size = mentions",
+};
+
+const LEGEND_ORDER: GraphNodeType[] = ["foreign_principal", "registrant", "contact", "recipient"];
 
 const BACKBONE_SIZE: Record<"foreign_principal" | "registrant", number> = {
   foreign_principal: 6,
@@ -27,6 +37,19 @@ function isBackbone(nodeType: GraphNodeType): boolean {
 function registrantSize(node: GraphNode): number {
   const activity = (node.contact_count ?? 0) + (node.contribution_count ?? 0);
   return BACKBONE_SIZE.registrant + Math.min(Math.sqrt(activity), 12);
+}
+
+// Contact/recipient nodes are already deduplicated by normalized name within
+// (and across) expanded registrants — build_registrant_expansion() collapses
+// repeat mentions into one node with multiple edges. Degree is therefore a
+// real occurrence signal already present in the loaded graph, no backend
+// change needed to size these nodes meaningfully instead of a flat constant.
+function resizeExpansionNodes(graph: Graph): void {
+  graph.forEachNode((id, attrs) => {
+    if (isBackbone(attrs.nodeType as GraphNodeType)) return;
+    const degree = graph.degree(id);
+    graph.setNodeAttribute(id, "size", 3 + Math.min(Math.sqrt(degree) * 2, 10));
+  });
 }
 
 // Rescales every node position so the graph is centered at (0,0) and its
@@ -53,20 +76,23 @@ function normalizePositions(graph: Graph): void {
 
 function buildBackboneGraph(data: CountryGraph): Graph {
   const graph = new Graph({ multi: true, type: "directed" });
-  for (const n of data.nodes) {
+  // Deterministic circular seed instead of Math.random() — removes the
+  // pre-layout scatter flash and makes loads reproducible between reloads.
+  data.nodes.forEach((n, i) => {
+    const angle = (2 * Math.PI * i) / Math.max(data.nodes.length, 1);
     graph.addNode(n.id, {
       label: n.label,
       size: n.node_type === "registrant" ? registrantSize(n) : BACKBONE_SIZE.foreign_principal,
       color: NODE_COLOR[n.node_type],
-      x: Math.random(),
-      y: Math.random(),
+      x: Math.cos(angle),
+      y: Math.sin(angle),
       nodeType: n.node_type,
       raw: n,
     });
-  }
+  });
   for (const e of data.edges) {
     if (graph.hasNode(e.source) && graph.hasNode(e.target)) {
-      graph.addEdge(e.source, e.target, { size: 1.5, color: "#c8c8c8", edgeType: e.edge_type });
+      graph.addEdge(e.source, e.target, { size: 1.5, color: "#c8c8c8", edgeType: e.edge_type, raw: e });
     }
   }
   if (graph.order > 1) {
@@ -85,6 +111,22 @@ function fitViewToNodes(renderer: Sigma): void {
   // that were far too zoomed OUT, so erring toward "too close, scroll out a
   // touch" is the safer direction to be wrong in than repeating that mistake.
   renderer.getCamera().setState({ x: 0, y: 0, ratio: 1.0 });
+}
+
+function zoomBy(renderer: Sigma, factor: number): void {
+  const camera = renderer.getCamera();
+  camera.animate({ ratio: camera.getState().ratio * factor }, { duration: 200 });
+}
+
+function resetView(renderer: Sigma): void {
+  renderer.getCamera().animate({ x: 0, y: 0, ratio: 1.0 }, { duration: 200 });
+}
+
+function focusNode(renderer: Sigma, graph: Graph, nodeId: string): GraphNode {
+  const x = graph.getNodeAttribute(nodeId, "x");
+  const y = graph.getNodeAttribute(nodeId, "y");
+  renderer.getCamera().animate({ x, y, ratio: 0.25 }, { duration: 300 });
+  return graph.getNodeAttribute(nodeId, "raw") as GraphNode;
 }
 
 // New nodes from an expansion land in a small ring around the registrant that
@@ -155,126 +197,272 @@ function NodeDetail({ node, edges }: { node: GraphNode; edges: GraphEdge[] }) {
   );
 }
 
-export function GraphView({ countryName, data }: { countryName: string; data: CountryGraph }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const sigmaRef = useRef<Sigma | null>(null);
-  const graphRef = useRef<Graph | null>(null);
-  const hoveredRef = useRef<string | null>(null);
-  const selectedIdRef = useRef<string | null>(null);
-  const expandedRef = useRef<Set<string>>(new Set());
-  const allEdgesRef = useRef<GraphEdge[]>(data.edges);
-  const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
-  const [expandingId, setExpandingId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const graph = buildBackboneGraph(data);
-    graphRef.current = graph;
-    allEdgesRef.current = data.edges;
-    expandedRef.current = new Set();
-    selectedIdRef.current = null;
-    hoveredRef.current = null;
-    setSelectedNode(null);
-
-    const renderer = new Sigma(graph, containerRef.current, {
-      labelColor: { color: "#f5f2ec" },
-      defaultEdgeType: "line",
-      nodeReducer: (node, attrs) => {
-        const nodeType = attrs.nodeType as GraphNodeType;
-        const showLabel = isBackbone(nodeType) || node === hoveredRef.current || node === selectedIdRef.current;
-        return { ...attrs, label: showLabel ? attrs.label : undefined };
-      },
-    });
-    sigmaRef.current = renderer;
-    fitViewToNodes(renderer);
-
-    renderer.on("enterNode", ({ node }) => { hoveredRef.current = node; renderer.refresh(); });
-    renderer.on("leaveNode", () => { hoveredRef.current = null; renderer.refresh(); });
-
-    renderer.on("clickNode", async ({ node }) => {
-      const attrs = graph.getNodeAttributes(node);
-      selectedIdRef.current = node;
-      setSelectedNode(attrs.raw as GraphNode);
-      if (attrs.nodeType !== "registrant") return;
-
-      if (expandedRef.current.has(node)) {
-        // Collapse: drop this registrant's outgoing edges, then prune any
-        // contact/recipient node left with no remaining edges (a node shared
-        // with another still-expanded registrant survives).
-        const toRemove = graph.filterOutEdges(node, (_, a) => a.edgeType !== "represents");
-        toRemove.forEach((e) => graph.dropEdge(e));
-        graph.forEachNode((n, a) => {
-          if (!isBackbone(a.nodeType) && graph.degree(n) === 0) graph.dropNode(n);
-        });
-        expandedRef.current.delete(node);
-        renderer.refresh();
-        return;
-      }
-
-      setExpandingId(node);
-      try {
-        const registrantId = Number(node.split(":")[1]);
-        const expansion = await api.expandRegistrant(countryName, registrantId);
-        const newIds: string[] = [];
-        for (const n of expansion.nodes) {
-          if (!graph.hasNode(n.id)) {
-            graph.addNode(n.id, {
-              label: n.label, size: 4, color: NODE_COLOR[n.node_type], x: 0, y: 0,
-              nodeType: n.node_type, raw: n,
-            });
-          }
-          newIds.push(n.id);
-        }
-        placeInRing(graph, node, newIds);
-        for (const e of expansion.edges) {
-          if (graph.hasNode(e.source) && graph.hasNode(e.target)) {
-            graph.addEdge(e.source, e.target, { size: 1, color: "#ffa300", edgeType: e.edge_type });
-          }
-        }
-        allEdgesRef.current = [...allEdgesRef.current, ...expansion.edges];
-        expandedRef.current.add(node);
-      } finally {
-        setExpandingId(null);
-        renderer.refresh();
-      }
-    });
-
-    return () => {
-      renderer.kill();
-      sigmaRef.current = null;
-      graphRef.current = null;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, countryName]);
-
-  useEffect(() => {
-    sigmaRef.current?.refresh();
-  }, [selectedNode]);
-
-  if (data.nodes.length === 0) {
-    return <div className="loading">No reportable-contact activity on file for this country.</div>;
-  }
-
-  return (
-    <div>
-      {data.omitted_registrant_count > 0 && (
-        <div className="group-card-note" style={{ marginBottom: 10 }}>
-          +{data.omitted_registrant_count} more registrant{data.omitted_registrant_count === 1 ? "" : "s"} with less
-          activity not shown.
-        </div>
-      )}
-      <div
-        ref={containerRef}
-        style={{ height: 480, position: "relative", background: "var(--space)", borderRadius: 4, border: "1px solid var(--rule)" }}
-      />
-      {expandingId && <div className="row-meta" style={{ marginTop: 6 }}>Loading contacts…</div>}
-      <div className="legend" style={{ borderTop: "none", paddingLeft: 0 }}>
-        <span><span className="dot" style={{ background: NODE_COLOR.foreign_principal }} />Foreign principal</span>
-        <span><span className="dot" style={{ background: NODE_COLOR.registrant }} />Registrant (size = activity, click to expand)</span>
-        <span><span className="dot" style={{ background: NODE_COLOR.contact }} />Contact</span>
-        <span><span className="dot" style={{ background: NODE_COLOR.recipient }} />Contribution recipient</span>
-      </div>
-      {selectedNode && <NodeDetail node={selectedNode} edges={allEdgesRef.current} />}
-    </div>
-  );
+export interface GraphViewHandle {
+  /** Pans/zooms to a node by exact (case-insensitive) label match. Returns
+   * whether a match is currently loaded — contact/recipient nodes only exist
+   * once their registrant has been expanded. */
+  focusByLabel: (label: string) => boolean;
 }
+
+export const GraphView = forwardRef<GraphViewHandle, { countryName: string; data: CountryGraph }>(
+  function GraphView({ countryName, data }, ref) {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const sigmaRef = useRef<Sigma | null>(null);
+    const graphRef = useRef<Graph | null>(null);
+    const hoveredRef = useRef<string | null>(null);
+    const selectedIdRef = useRef<string | null>(null);
+    const expandedRef = useRef<Set<string>>(new Set());
+    const allEdgesRef = useRef<GraphEdge[]>(data.edges);
+    const hiddenTypesRef = useRef<Set<GraphNodeType>>(new Set());
+    const hoverEdgeRef = useRef<GraphEdge | null>(null);
+    const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
+    const [expandingId, setExpandingId] = useState<string | null>(null);
+    const [hiddenTypes, setHiddenTypes] = useState<Set<GraphNodeType>>(new Set());
+    const [tooltip, setTooltip] = useState<{ edge: GraphEdge; x: number; y: number } | null>(null);
+    const [findQuery, setFindQuery] = useState("");
+    const [findOpen, setFindOpen] = useState(false);
+
+    useImperativeHandle(ref, () => ({
+      focusByLabel: (label: string) => {
+        const graph = graphRef.current;
+        const renderer = sigmaRef.current;
+        if (!graph || !renderer) return false;
+        const target = label.trim().toLowerCase();
+        let foundId: string | null = null;
+        graph.forEachNode((id, attrs) => {
+          if (foundId) return;
+          if (((attrs.label as string) || "").trim().toLowerCase() === target) foundId = id;
+        });
+        if (!foundId) return false;
+        selectedIdRef.current = foundId;
+        setSelectedNode(focusNode(renderer, graph, foundId));
+        renderer.refresh();
+        return true;
+      },
+    }));
+
+    useEffect(() => {
+      hiddenTypesRef.current = hiddenTypes;
+      sigmaRef.current?.refresh();
+    }, [hiddenTypes]);
+
+    useEffect(() => {
+      if (!containerRef.current) return;
+      const graph = buildBackboneGraph(data);
+      graphRef.current = graph;
+      allEdgesRef.current = data.edges;
+      expandedRef.current = new Set();
+      selectedIdRef.current = null;
+      hoveredRef.current = null;
+      hoverEdgeRef.current = null;
+      setSelectedNode(null);
+      setHiddenTypes(new Set());
+
+      const renderer = new Sigma(graph, containerRef.current, {
+        labelColor: { color: "#f5f2ec" },
+        defaultEdgeType: "arrow",
+        edgeProgramClasses: { arrow: EdgeArrowProgram },
+        enableEdgeEvents: true,
+        nodeReducer: (node, attrs) => {
+          const nodeType = attrs.nodeType as GraphNodeType;
+          if (hiddenTypesRef.current.has(nodeType)) return { ...attrs, hidden: true };
+          const showLabel = isBackbone(nodeType) || node === hoveredRef.current || node === selectedIdRef.current;
+          return { ...attrs, label: showLabel ? attrs.label : undefined };
+        },
+        edgeReducer: (edge, attrs) => {
+          const [source, target] = graph.extremities(edge);
+          const sourceType = graph.getNodeAttribute(source, "nodeType") as GraphNodeType;
+          const targetType = graph.getNodeAttribute(target, "nodeType") as GraphNodeType;
+          if (hiddenTypesRef.current.has(sourceType) || hiddenTypesRef.current.has(targetType)) {
+            return { ...attrs, hidden: true };
+          }
+          return attrs;
+        },
+      });
+      sigmaRef.current = renderer;
+      fitViewToNodes(renderer);
+
+      renderer.on("enterNode", ({ node }) => { hoveredRef.current = node; renderer.refresh(); });
+      renderer.on("leaveNode", () => { hoveredRef.current = null; renderer.refresh(); });
+      renderer.on("enterEdge", ({ edge }) => { hoverEdgeRef.current = graph.getEdgeAttribute(edge, "raw") as GraphEdge; });
+      renderer.on("leaveEdge", () => { hoverEdgeRef.current = null; setTooltip(null); });
+
+      const onMouseMove = (e: MouseEvent) => {
+        if (!hoverEdgeRef.current || !containerRef.current) return;
+        const rect = containerRef.current.getBoundingClientRect();
+        setTooltip({ edge: hoverEdgeRef.current, x: e.clientX - rect.left, y: e.clientY - rect.top });
+      };
+      containerRef.current.addEventListener("mousemove", onMouseMove);
+
+      renderer.on("clickNode", async ({ node }) => {
+        const attrs = graph.getNodeAttributes(node);
+        selectedIdRef.current = node;
+        setSelectedNode(attrs.raw as GraphNode);
+        if (attrs.nodeType !== "registrant") return;
+
+        if (expandedRef.current.has(node)) {
+          // Collapse: drop this registrant's outgoing edges, then prune any
+          // contact/recipient node left with no remaining edges (a node shared
+          // with another still-expanded registrant survives).
+          const toRemove = graph.filterOutEdges(node, (_, a) => a.edgeType !== "represents");
+          toRemove.forEach((e) => graph.dropEdge(e));
+          graph.forEachNode((n, a) => {
+            if (!isBackbone(a.nodeType) && graph.degree(n) === 0) graph.dropNode(n);
+          });
+          resizeExpansionNodes(graph);
+          expandedRef.current.delete(node);
+          renderer.refresh();
+          return;
+        }
+
+        setExpandingId(node);
+        try {
+          const registrantId = Number(node.split(":")[1]);
+          const expansion = await api.expandRegistrant(countryName, registrantId);
+          const newIds: string[] = [];
+          for (const n of expansion.nodes) {
+            if (!graph.hasNode(n.id)) {
+              graph.addNode(n.id, {
+                label: n.label, size: 4, color: NODE_COLOR[n.node_type], x: 0, y: 0,
+                nodeType: n.node_type, raw: n,
+              });
+            }
+            newIds.push(n.id);
+          }
+          placeInRing(graph, node, newIds);
+          for (const e of expansion.edges) {
+            if (graph.hasNode(e.source) && graph.hasNode(e.target)) {
+              graph.addEdge(e.source, e.target, { size: 1, color: "#ffa300", edgeType: e.edge_type, raw: e });
+            }
+          }
+          resizeExpansionNodes(graph);
+          allEdgesRef.current = [...allEdgesRef.current, ...expansion.edges];
+          expandedRef.current.add(node);
+        } finally {
+          setExpandingId(null);
+          renderer.refresh();
+        }
+      });
+
+      return () => {
+        containerRef.current?.removeEventListener("mousemove", onMouseMove);
+        renderer.kill();
+        sigmaRef.current = null;
+        graphRef.current = null;
+      };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [data, countryName]);
+
+    useEffect(() => {
+      sigmaRef.current?.refresh();
+    }, [selectedNode]);
+
+    if (data.nodes.length === 0) {
+      return <div className="loading">No reportable-contact activity on file for this country.</div>;
+    }
+
+    const toggleType = (t: GraphNodeType) => {
+      setHiddenTypes((prev) => {
+        const next = new Set(prev);
+        if (next.has(t)) next.delete(t); else next.add(t);
+        return next;
+      });
+    };
+
+    const findMatches: { id: string; label: string }[] = [];
+    if (findOpen && findQuery.trim().length >= 2 && graphRef.current) {
+      const q = findQuery.trim().toLowerCase();
+      graphRef.current.forEachNode((id, attrs) => {
+        if (findMatches.length >= 8) return;
+        const label = (attrs.label as string) || "";
+        if (label.toLowerCase().includes(q)) findMatches.push({ id, label });
+      });
+    }
+
+    const selectFindMatch = (id: string) => {
+      const graph = graphRef.current, renderer = sigmaRef.current;
+      if (!graph || !renderer) return;
+      selectedIdRef.current = id;
+      setSelectedNode(focusNode(renderer, graph, id));
+      renderer.refresh();
+      setFindQuery("");
+      setFindOpen(false);
+    };
+
+    return (
+      <div>
+        <p className="graph-caption">
+          Click any registrant to reveal their reportable contacts and contribution recipients. Click a legend swatch to
+          hide/show that node type.
+        </p>
+
+        <div className="graph-toolbar">
+          <div className="graph-find">
+            <input
+              type="text"
+              placeholder="Find in this graph…"
+              value={findQuery}
+              onChange={(e) => setFindQuery(e.target.value)}
+              onFocus={() => setFindOpen(true)}
+              onBlur={() => setTimeout(() => setFindOpen(false), 150)}
+            />
+            {findOpen && findQuery.trim().length >= 2 && (
+              <ul className="graph-find-results">
+                {findMatches.length === 0 ? (
+                  <li className="search-no-results">No matches loaded</li>
+                ) : (
+                  findMatches.map((m) => (
+                    <li key={m.id} onMouseDown={() => selectFindMatch(m.id)}>{m.label}</li>
+                  ))
+                )}
+              </ul>
+            )}
+          </div>
+          <div className="graph-controls">
+            <button className="graph-control-btn" title="Zoom in" onClick={() => sigmaRef.current && zoomBy(sigmaRef.current, 0.7)}>+</button>
+            <button className="graph-control-btn" title="Zoom out" onClick={() => sigmaRef.current && zoomBy(sigmaRef.current, 1 / 0.7)}>&minus;</button>
+            <button className="graph-control-btn" title="Reset view" onClick={() => sigmaRef.current && resetView(sigmaRef.current)}>Reset</button>
+          </div>
+        </div>
+
+        {data.omitted_registrant_count > 0 && (
+          <span className="pill-note">
+            +{data.omitted_registrant_count} more registrant{data.omitted_registrant_count === 1 ? "" : "s"} with less activity not shown
+          </span>
+        )}
+
+        <div className="graph-canvas-wrap">
+          <div ref={containerRef} className="graph-canvas" />
+          {tooltip && (
+            <div className="graph-tooltip" style={{ left: tooltip.x + 12, top: tooltip.y + 12 }}>
+              <div className="graph-tooltip-type">
+                {tooltip.edge.edge_type}{tooltip.edge.edge_date ? ` · ${tooltip.edge.edge_date}` : ""}
+              </div>
+              {tooltip.edge.detail && <div className="graph-tooltip-detail">{tooltip.edge.detail}</div>}
+              {tooltip.edge.amount !== null && tooltip.edge.amount !== undefined && (
+                <div className="graph-tooltip-detail">${tooltip.edge.amount.toLocaleString()}</div>
+              )}
+            </div>
+          )}
+        </div>
+        {expandingId && <div className="row-meta" style={{ marginTop: 6 }}>Loading contacts…</div>}
+
+        <div className="legend">
+          {LEGEND_ORDER.map((t) => (
+            <button
+              key={t}
+              className={`legend-item${hiddenTypes.has(t) ? " inactive" : ""}`}
+              onClick={() => toggleType(t)}
+              title="Click to hide/show"
+            >
+              <span className="dot" style={{ background: NODE_COLOR[t] }} />
+              {LEGEND_LABEL[t]}
+            </button>
+          ))}
+        </div>
+
+        {selectedNode && <NodeDetail node={selectedNode} edges={allEdgesRef.current} />}
+      </div>
+    );
+  },
+);

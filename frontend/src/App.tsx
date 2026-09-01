@@ -6,6 +6,7 @@ import { Footer } from "./components/Footer";
 import { ForeignPrincipalGroupView } from "./components/ForeignPrincipalGroupView";
 import { ForeignPrincipalsBrowseView } from "./components/ForeignPrincipalsBrowseView";
 import { ForeignPrincipalView } from "./components/ForeignPrincipalView";
+import { RegistrantGroupView } from "./components/RegistrantGroupView";
 import { RegistrantView } from "./components/RegistrantView";
 import { SearchBox } from "./components/SearchBox";
 import { useStore } from "./state/store";
@@ -40,6 +41,7 @@ export default function App() {
       <main className="main">
         {view.kind === "home" && <EmptyState />}
         {view.kind === "registrant" && <RegistrantView id={view.id} />}
+        {view.kind === "registrant-group" && <RegistrantGroupView name={view.name} />}
         {view.kind === "foreign-principal" && <ForeignPrincipalView id={view.id} />}
         {view.kind === "foreign-principal-group" && (
           <ForeignPrincipalGroupView name={view.name} country={view.country} />

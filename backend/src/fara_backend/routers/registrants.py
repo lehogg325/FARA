@@ -4,7 +4,16 @@ import psycopg
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from fara_backend.db import get_db
-from fara_backend.schemas import ForeignPrincipal, Page, RegistrantDetail, RegistrantDoc, RegistrantSummary, ShortFormRegistrant
+from fara_backend.schemas import (
+    ForeignPrincipal,
+    Page,
+    RegistrantByNameGroup,
+    RegistrantDetail,
+    RegistrantDoc,
+    RegistrantSummary,
+    ShortFormRegistrant,
+)
+from fara_backend.text_normalize import NORM_SQL
 
 router = APIRouter(prefix="/registrants", tags=["registrants"])
 
@@ -46,6 +55,29 @@ def list_registrants(
         f"SELECT * FROM registrants WHERE {where_sql} ORDER BY name LIMIT %(limit)s OFFSET %(offset)s", params
     ).fetchall()
     return Page(items=[RegistrantSummary(**r) for r in rows], total=total, limit=limit, offset=offset)
+
+
+# Registered ahead of /{registrant_id} — otherwise FastAPI would try to parse
+# the literal path segment "by-name" as that route's int path param.
+@router.get("/by-name", response_model=RegistrantByNameGroup)
+def registrants_by_name(
+    name: str,
+    jurisdiction: str = Query("fara"),
+    conn: psycopg.Connection = Depends(get_db),
+) -> RegistrantByNameGroup:
+    rows = conn.execute(
+        f"SELECT * FROM registrants WHERE jurisdiction = %(jurisdiction)s "
+        f"AND {NORM_SQL.format(col='name')} = {NORM_SQL.format(col='%(name)s')} "
+        f"ORDER BY registration_date DESC NULLS LAST",
+        {"jurisdiction": jurisdiction, "name": name},
+    ).fetchall()
+    if not rows:
+        raise HTTPException(status_code=404, detail="no registrants found with that name")
+    return RegistrantByNameGroup(
+        name=rows[0]["name"],
+        registrant_count=len(rows),
+        registrants=[RegistrantSummary(**r) for r in rows],
+    )
 
 
 @router.get("/{registrant_id}", response_model=RegistrantDetail)

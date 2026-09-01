@@ -1,12 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { api, type ForeignPrincipalSort } from "../api/client";
+import { api, type ForeignPrincipal, type ForeignPrincipalGrouped, type ForeignPrincipalSort } from "../api/client";
 import { useStore } from "../state/store";
 
 const PAGE_SIZE = 25;
 
 function fmtDate(d: string | null): string {
   return d ?? "—";
+}
+
+function isGrouped(item: ForeignPrincipal | ForeignPrincipalGrouped): item is ForeignPrincipalGrouped {
+  return "registrant_count" in item;
 }
 
 export function ForeignPrincipalsBrowseView() {
@@ -18,6 +22,7 @@ export function ForeignPrincipalsBrowseView() {
   const [country, setCountry] = useState("");
   const [status, setStatus] = useState<"" | "active" | "terminated">("");
   const [sort, setSort] = useState<ForeignPrincipalSort>("registration_date_desc");
+  const [groupByName, setGroupByName] = useState(true);
   const [offset, setOffset] = useState(0);
 
   // Debounce the free-text search so it doesn't fire on every keystroke.
@@ -28,13 +33,14 @@ export function ForeignPrincipalsBrowseView() {
 
   const countries = useQuery({ queryKey: ["countries"], queryFn: api.countries, staleTime: Infinity });
   const results = useQuery({
-    queryKey: ["fp-browse", q, country, status, sort, offset],
+    queryKey: ["fp-browse", q, country, status, sort, groupByName, offset],
     queryFn: () =>
       api.searchForeignPrincipals({
         q: q || undefined,
         country: country || undefined,
         status: status || undefined,
         sort,
+        group_by_name: groupByName,
         offset,
         limit: PAGE_SIZE,
       }),
@@ -79,6 +85,14 @@ export function ForeignPrincipalsBrowseView() {
           <option value="name_asc">Name (A–Z)</option>
           <option value="country_asc">Country (A–Z)</option>
         </select>
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={groupByName}
+            onChange={(e) => resetPage(setGroupByName)(e.target.checked)}
+          />
+          Group by principal name
+        </label>
       </div>
 
       {results.isLoading && <div className="loading">Loading…</div>}
@@ -87,25 +101,45 @@ export function ForeignPrincipalsBrowseView() {
         <>
           <div className="row-meta" style={{ marginBottom: 8 }}>{results.data.total.toLocaleString()} foreign principals</div>
           <ul className="record-list">
-            {results.data.items.map((fp) => (
-              <li key={fp.foreign_principal_id}>
-                <button
-                  className="row-btn"
-                  style={{ flexDirection: "column", alignItems: "flex-start", gap: 3 }}
-                  onClick={() => navigate({ kind: "foreign-principal", id: fp.foreign_principal_id })}
-                >
-                  <span>
-                    {fp.foreign_principal_name}
-                    {fp.country_raw && <span className="row-meta"> · {fp.country_raw}</span>}
-                  </span>
-                  <span className="row-meta">
-                    represented by {fp.registrant_name}
-                    <span className={`status-pill ${fp.registrant_status}`} style={{ marginLeft: 6 }}>{fp.registrant_status}</span>
-                    {" · "}registered {fmtDate(fp.registration_date)}
-                  </span>
-                </button>
-              </li>
-            ))}
+            {results.data.items.map((fp) =>
+              isGrouped(fp) ? (
+                <li key={`${fp.foreign_principal_name}-${fp.country_raw}`}>
+                  <button
+                    className="row-btn"
+                    style={{ flexDirection: "column", alignItems: "flex-start", gap: 3 }}
+                    onClick={() => navigate({ kind: "foreign-principal-group", name: fp.foreign_principal_name, country: fp.country_raw })}
+                  >
+                    <span>
+                      {fp.foreign_principal_name}
+                      {fp.country_raw && <span className="row-meta"> · {fp.country_raw}</span>}
+                    </span>
+                    <span className="row-meta">
+                      {fp.registrant_count} registrant{fp.registrant_count === 1 ? "" : "s"}: {fp.sample_registrant_names.join(", ")}
+                      {fp.registrant_count > fp.sample_registrant_names.length ? "…" : ""}
+                      {" · "}latest {fmtDate(fp.latest_registration_date)}
+                    </span>
+                  </button>
+                </li>
+              ) : (
+                <li key={fp.foreign_principal_id}>
+                  <button
+                    className="row-btn"
+                    style={{ flexDirection: "column", alignItems: "flex-start", gap: 3 }}
+                    onClick={() => navigate({ kind: "foreign-principal", id: fp.foreign_principal_id })}
+                  >
+                    <span>
+                      {fp.foreign_principal_name}
+                      {fp.country_raw && <span className="row-meta"> · {fp.country_raw}</span>}
+                    </span>
+                    <span className="row-meta">
+                      represented by {fp.registrant_name}
+                      <span className={`status-pill ${fp.registrant_status}`} style={{ marginLeft: 6 }}>{fp.registrant_status}</span>
+                      {" · "}registered {fmtDate(fp.registration_date)}
+                    </span>
+                  </button>
+                </li>
+              ),
+            )}
             {results.data.items.length === 0 && <li className="loading">No matches.</li>}
           </ul>
           {results.data.total > PAGE_SIZE && (

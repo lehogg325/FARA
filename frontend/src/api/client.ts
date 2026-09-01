@@ -16,6 +16,12 @@ export interface SearchResult {
   label: string;
   detail: string | null;
   registration_number: number | null;
+  // Populated on 'registrant'/'foreign_principal' hits: how many raw records
+  // share this normalized name. group_count > 1 means "N registrations" or
+  // "N registrants report this principal" — route to a group view instead of
+  // a single entity.
+  group_count: number | null;
+  active_count: number | null;
 }
 
 export interface RegistrantSummary {
@@ -71,6 +77,20 @@ export type ForeignPrincipalSort = "registration_date_desc" | "name_asc" | "coun
 export interface ForeignPrincipalByNameGroup {
   foreign_principal_name: string;
   country_raw: string | null;
+  registrant_count: number;
+  registrants: RegistrantSummary[];
+}
+
+export interface ForeignPrincipalGrouped {
+  foreign_principal_name: string;
+  country_raw: string | null;
+  registrant_count: number;
+  sample_registrant_names: string[];
+  latest_registration_date: string | null;
+}
+
+export interface RegistrantByNameGroup {
+  name: string;
   registrant_count: number;
   registrants: RegistrantSummary[];
 }
@@ -251,6 +271,7 @@ export const api = {
     get<SearchResult[]>(`/api/search${qs({ q, type, limit: 15 })}`, signal),
 
   registrant: (id: number) => get<RegistrantDetail>(`/api/registrants/${id}`),
+  registrantsByName: (name: string) => get<RegistrantByNameGroup>(`/api/registrants/by-name${qs({ name })}`),
   registrantForeignPrincipals: (id: number, offset = 0, limit = 25) =>
     get<Page<ForeignPrincipal>>(`/api/registrants/${id}/foreign-principals${qs({ offset, limit })}`),
   registrantShortForms: (id: number, offset = 0, limit = 25) =>
@@ -263,8 +284,11 @@ export const api = {
     get<ForeignPrincipalByNameGroup[]>(`/api/foreign-principals/by-name${qs({ name, country })}`),
   searchForeignPrincipals: (params: {
     q?: string; country?: string; status?: "active" | "terminated"; sort?: ForeignPrincipalSort;
-    offset?: number; limit?: number;
-  }) => get<Page<ForeignPrincipal>>(`/api/foreign-principals${qs(params)}`),
+    group_by_name?: boolean; offset?: number; limit?: number;
+  }) =>
+    get<Page<ForeignPrincipal | ForeignPrincipalGrouped>>(
+      `/api/foreign-principals${qs({ ...params, group_by_name: params.group_by_name === false ? "false" : undefined })}`,
+    ),
 
   document: (id: number) => get<RegistrantDoc>(`/api/documents/${id}`),
   documentText: (id: number) => get<DocumentText>(`/api/documents/${id}/text`),

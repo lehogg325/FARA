@@ -3,6 +3,7 @@ from __future__ import annotations
 import psycopg
 
 from fara_backend.schemas import CountryGraph, GraphEdge, GraphNode, RegistrantExpansion, TopContact, TopRecipient
+from fara_backend.text_normalize import NORM_SQL, norm
 
 # Comfortably above every real country's backbone measured live (docs/phase2.md) —
 # Japan, the busiest, is 136 registrant+foreign-principal nodes. A genuine backstop,
@@ -14,10 +15,6 @@ BACKBONE_CAP = 150
 # the largest real PR-campaign filing found live has 105 contact rows) — this is a
 # defensive backstop, not an expected truncation.
 EXPANSION_CAP = 500
-
-
-def _norm(text: str) -> str:
-    return " ".join(text.strip().lower().split())
 
 
 def _registrant_activity(conn: psycopg.Connection, registrant_ids: list[int]) -> dict[int, dict]:
@@ -162,7 +159,7 @@ def build_registrant_expansion(conn: psycopg.Connection, registrant_id: int) -> 
     for c in contacts:
         if not c["contact_name_raw"]:
             continue
-        target = f"contact:{_norm(c['contact_name_raw'])}"
+        target = f"contact:{norm(c['contact_name_raw'])}"
         if target not in nodes:
             nodes[target] = GraphNode(id=target, node_type="contact", label=c["contact_name_raw"])
         edges.append(
@@ -175,7 +172,7 @@ def build_registrant_expansion(conn: psycopg.Connection, registrant_id: int) -> 
     for con in contributions:
         if not con["field_value_text"]:
             continue
-        target = f"recipient:{_norm(con['field_value_text'])}"
+        target = f"recipient:{norm(con['field_value_text'])}"
         if target not in nodes:
             nodes[target] = GraphNode(id=target, node_type="recipient", label=con["field_value_text"])
         edges.append(
@@ -188,19 +185,13 @@ def build_registrant_expansion(conn: psycopg.Connection, registrant_id: int) -> 
     return RegistrantExpansion(registrant_id=registrant_id, nodes=list(nodes.values()), edges=edges)
 
 
-# Same normalization as _norm() above, expressed in SQL for GROUP BY — deliberately
-# kept in exact lockstep (strip, lowercase, collapse internal whitespace) so a
-# contact/recipient's count here matches its node degree in the expanded graph.
-_NORM_SQL = "lower(regexp_replace(trim({col}), '\\s+', ' ', 'g'))"
-
-
 def top_contacts(conn: psycopg.Connection, jurisdiction: str, country_name: str, limit: int) -> list[TopContact]:
     rows = conn.execute(
         f"""
         SELECT (array_agg(contact_name_raw))[1] AS contact_name_raw, count(*) AS occurrence_count,
                (array_agg(DISTINCT registrant_doc_id))[1:5] AS sample_registrant_doc_ids
         FROM (
-            SELECT rc.registrant_doc_id, rc.contact_name_raw, {_NORM_SQL.format(col='rc.contact_name_raw')} AS norm_name
+            SELECT rc.registrant_doc_id, rc.contact_name_raw, {NORM_SQL.format(col='rc.contact_name_raw')} AS norm_name
             FROM reportable_contacts rc
             JOIN registrant_docs rd ON rd.registrant_doc_id = rc.registrant_doc_id
             JOIN foreign_principals fp ON fp.registrant_id = rd.registrant_id
@@ -223,7 +214,7 @@ def top_recipients(conn: psycopg.Connection, jurisdiction: str, country_name: st
                (array_agg(DISTINCT registrant_doc_id))[1:5] AS sample_registrant_doc_ids
         FROM (
             SELECT def.registrant_doc_id, def.field_value_text, def.field_value_numeric,
-                   {_NORM_SQL.format(col='def.field_value_text')} AS norm_name
+                   {NORM_SQL.format(col='def.field_value_text')} AS norm_name
             FROM document_extracted_fields def
             JOIN registrant_docs rd ON rd.registrant_doc_id = def.registrant_doc_id
             JOIN foreign_principals fp ON fp.registrant_id = rd.registrant_id

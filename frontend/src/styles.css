@@ -140,6 +140,14 @@ body {
 .badge-short_form_registrant { background: #54a272; }
 .badge-country { background: var(--indigo); color: var(--lunar); }
 .hit-label { font-weight: 500; color: var(--lunar); }
+.hit-group-count {
+  margin-left: 8px;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--yellow);
+}
 .hit-meta { margin-left: auto; font-family: var(--mono); color: var(--gray); font-size: 10.5px; }
 
 /* ── Empty state ──────────────────────────────────────────────────────── */
@@ -172,6 +180,18 @@ select {
   border-radius: 4px;
   padding: 8px 10px;
 }
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--gray);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.checkbox-label input { accent-color: var(--orange); }
 
 .btn-primary {
   font-family: var(--mono);
@@ -470,6 +490,170 @@ select {
   display: inline-block;
 }
 .doc-actions a:hover { background: var(--orange); color: var(--lunar); }
+
+/* ── Tabs (country page: Overview / Network / Topics) ─────────────────── */
+.tab-bar {
+  display: flex;
+  gap: 24px;
+  border-bottom: 1px solid var(--rule);
+  margin: 26px 0 20px;
+}
+.tab-btn {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gray);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 0 0 10px;
+  margin-bottom: -1px;
+  cursor: pointer;
+}
+.tab-btn:hover { color: var(--lunar); }
+.tab-btn.active { color: var(--orange); border-bottom-color: var(--orange); }
+.tab-panel { padding-top: 2px; }
+
+/* ── Network graph ────────────────────────────────────────────────────── */
+.graph-caption {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--gray);
+  margin: 0 0 12px;
+}
+.graph-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.graph-find { position: relative; flex: 1 1 220px; max-width: 280px; }
+.graph-find input {
+  width: 100%;
+  padding: 7px 10px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--lunar);
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+}
+.graph-find input::placeholder { color: var(--gray); }
+.graph-find input:focus { outline: none; border-color: var(--orange); }
+.graph-find-results {
+  position: absolute;
+  z-index: 25;
+  left: 0; right: 0; top: 34px;
+  background: #171724;
+  border: 1px solid var(--indigo);
+  border-radius: 4px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.graph-find-results li {
+  padding: 6px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-family: var(--serif-body);
+  font-size: 13px;
+  color: var(--lunar);
+}
+.graph-find-results li:hover { background: var(--indigo); }
+.graph-controls { display: flex; gap: 6px; flex-shrink: 0; }
+.graph-control-btn {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gray);
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 6px 12px;
+  cursor: pointer;
+  min-width: 34px;
+}
+.graph-control-btn:hover { color: var(--orange); border-color: var(--orange); }
+
+.pill-note {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--yellow);
+  background: rgba(255, 163, 0, 0.1);
+  border: 1px solid rgba(255, 163, 0, 0.35);
+  border-radius: 10px;
+  padding: 3px 10px;
+  margin-bottom: 10px;
+}
+
+.graph-canvas-wrap { position: relative; }
+.graph-canvas {
+  height: min(74vh, 640px);
+  min-height: 440px;
+  position: relative;
+  border-radius: 4px;
+  border: 1px solid var(--rule);
+  background-color: var(--space);
+  /* Faint Blueprint Indigo grid — the style guide's own "technical diagrams"
+     color, used here to frame the canvas as a diagram rather than a chart. */
+  background-image:
+    repeating-linear-gradient(0deg, rgba(38, 61, 107, 0.35) 0, rgba(38, 61, 107, 0.35) 1px, transparent 1px, transparent 40px),
+    repeating-linear-gradient(90deg, rgba(38, 61, 107, 0.35) 0, rgba(38, 61, 107, 0.35) 1px, transparent 1px, transparent 40px);
+}
+.graph-tooltip {
+  position: absolute;
+  z-index: 20;
+  pointer-events: none;
+  background: #171724;
+  border: 1px solid var(--indigo);
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--lunar);
+  max-width: 240px;
+}
+.graph-tooltip-type { text-transform: uppercase; letter-spacing: 0.08em; color: var(--orange); margin-bottom: 3px; }
+.graph-tooltip-detail { color: var(--lunar); line-height: 1.4; }
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--lunar);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+.legend-item.inactive { opacity: 0.35; text-decoration: line-through; }
+.legend-item .dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
 
 /* ── Footer ───────────────────────────────────────────────────────────── */
 .app-footer {

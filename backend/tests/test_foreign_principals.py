@@ -17,11 +17,47 @@ def test_get_foreign_principal(client, seeded):
 
 
 def test_list_foreign_principals_includes_registrant_name(client, seeded):
-    resp = client.get("/api/foreign-principals")
+    resp = client.get("/api/foreign-principals", params={"group_by_name": "false"})
     assert resp.status_code == 200
     item = resp.json()["items"][0]
     assert item["registrant_name"] == "Brownstein Hyatt Farber Schreck, LLP"
     assert item["registrant_status"] == "active"
+
+
+def test_list_foreign_principals_grouped_by_default(client, seeded):
+    resp = client.get("/api/foreign-principals")
+    assert resp.status_code == 200
+    item = resp.json()["items"][0]
+    assert item["foreign_principal_name"] == "The Government of Iceland"
+    assert item["registrant_count"] == 1
+    assert item["sample_registrant_names"] == ["Brownstein Hyatt Farber Schreck, LLP"]
+    assert "registrant_name" not in item
+
+
+def test_list_foreign_principals_grouped_collapses_multiple_registrants(client, conn, seeded):
+    conn.execute(
+        "INSERT INTO registrants "
+        "(jurisdiction, registration_number, name, registration_date, status, source_row_hash, "
+        " first_seen_snapshot_date, last_seen_snapshot_date) "
+        "VALUES ('fara', 6001, 'Second Firm LLC', '2021-01-01', 'active', 'h10', '2026-01-01', '2026-01-01') "
+        "RETURNING registrant_id"
+    )
+    second_registrant_id = conn.execute("SELECT registrant_id FROM registrants WHERE registration_number = 6001").fetchone()[
+        "registrant_id"
+    ]
+    conn.execute(
+        "INSERT INTO foreign_principals "
+        "(jurisdiction, registrant_id, registration_number, foreign_principal_name, country_raw, "
+        " registration_date, source_row_hash, first_seen_snapshot_date, last_seen_snapshot_date) "
+        "VALUES ('fara', %s, 6001, 'the government of iceland', 'ICELAND', '2021-01-01', 'h11', "
+        " '2026-01-01', '2026-01-01')",
+        (second_registrant_id,),
+    )
+    resp = client.get("/api/foreign-principals")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 1
+    assert body["items"][0]["registrant_count"] == 2
 
 
 def test_list_foreign_principals_filters_by_status(client, seeded):

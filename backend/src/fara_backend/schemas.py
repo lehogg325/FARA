@@ -72,6 +72,24 @@ class ForeignPrincipalByNameGroup(BaseModel):
     registrants: list[RegistrantSummary]
 
 
+class ForeignPrincipalGrouped(BaseModel):
+    """One row per normalized (name, country) pair — the default shape for
+    /api/foreign-principals, so a principal reported by many registrants shows
+    once with a count instead of flooding the list with one row per relationship."""
+
+    foreign_principal_name: str
+    country_raw: str | None
+    registrant_count: int
+    sample_registrant_names: list[str]
+    latest_registration_date: date | None
+
+
+class RegistrantByNameGroup(BaseModel):
+    name: str
+    registrant_count: int
+    registrants: list[RegistrantSummary]
+
+
 class RegistrantDoc(BaseModel):
     registrant_doc_id: int
     jurisdiction: str
@@ -129,6 +147,13 @@ class SearchResult(BaseModel):
     label: str
     detail: str | None
     registration_number: int | None
+    # Populated on 'registrant' and 'foreign_principal' hits only: how many raw
+    # records (registrations / registrant-relationships) share this normalized
+    # name. group_count > 1 means the frontend should route to a group view
+    # instead of a single entity, so the same real-world name doesn't show up
+    # as several indistinguishable search hits.
+    group_count: int | None = None
+    active_count: int | None = None
 
 
 class DocumentType(BaseModel):
