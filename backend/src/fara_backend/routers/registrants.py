@@ -78,8 +78,10 @@ def get_registrant_foreign_principals(
         "SELECT count(*) AS n FROM foreign_principals WHERE registrant_id = %s", (registrant_id,)
     ).fetchone()["n"]
     rows = conn.execute(
-        "SELECT * FROM foreign_principals WHERE registrant_id = %s "
-        "ORDER BY registration_date DESC NULLS LAST LIMIT %s OFFSET %s",
+        "SELECT fp.*, r.name AS registrant_name, r.status AS registrant_status "
+        "FROM foreign_principals fp JOIN registrants r ON r.registrant_id = fp.registrant_id "
+        "WHERE fp.registrant_id = %s "
+        "ORDER BY fp.registration_date DESC NULLS LAST LIMIT %s OFFSET %s",
         (registrant_id, limit, offset),
     ).fetchall()
     return Page(items=[ForeignPrincipal(**r) for r in rows], total=total, limit=limit, offset=offset)

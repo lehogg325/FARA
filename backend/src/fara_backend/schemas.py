@@ -59,6 +59,10 @@ class ForeignPrincipal(BaseModel):
     state: str | None
     registration_date: date | None
     termination_date: date | None
+    # Denormalized from registrants — lets a foreign-principal search/browse
+    # view show who represents each result without a follow-up lookup.
+    registrant_name: str
+    registrant_status: str
 
 
 class ForeignPrincipalByNameGroup(BaseModel):

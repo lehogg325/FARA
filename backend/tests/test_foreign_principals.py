@@ -10,7 +10,34 @@ def test_list_foreign_principals(client, seeded):
 def test_get_foreign_principal(client, seeded):
     resp = client.get(f"/api/foreign-principals/{seeded['foreign_principal_id']}")
     assert resp.status_code == 200
-    assert resp.json()["foreign_principal_name"] == "The Government of Iceland"
+    body = resp.json()
+    assert body["foreign_principal_name"] == "The Government of Iceland"
+    assert body["registrant_name"] == "Brownstein Hyatt Farber Schreck, LLP"
+    assert body["registrant_status"] == "active"
+
+
+def test_list_foreign_principals_includes_registrant_name(client, seeded):
+    resp = client.get("/api/foreign-principals")
+    assert resp.status_code == 200
+    item = resp.json()["items"][0]
+    assert item["registrant_name"] == "Brownstein Hyatt Farber Schreck, LLP"
+    assert item["registrant_status"] == "active"
+
+
+def test_list_foreign_principals_filters_by_status(client, seeded):
+    resp = client.get("/api/foreign-principals", params={"status": "terminated"})
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 0
+
+    resp = client.get("/api/foreign-principals", params={"status": "active"})
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 1
+
+
+def test_list_foreign_principals_sort_name_asc(client, seeded):
+    resp = client.get("/api/foreign-principals", params={"sort": "name_asc"})
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 1
 
 
 def test_get_foreign_principal_404(client, seeded):

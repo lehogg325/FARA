@@ -4,6 +4,7 @@ import { DocumentView } from "./components/DocumentView";
 import { EmptyState } from "./components/EmptyState";
 import { Footer } from "./components/Footer";
 import { ForeignPrincipalGroupView } from "./components/ForeignPrincipalGroupView";
+import { ForeignPrincipalsBrowseView } from "./components/ForeignPrincipalsBrowseView";
 import { ForeignPrincipalView } from "./components/ForeignPrincipalView";
 import { RegistrantView } from "./components/RegistrantView";
 import { SearchBox } from "./components/SearchBox";
@@ -26,6 +27,14 @@ export default function App() {
           <h1>The Foreign Agents Registry</h1>
         </a>
         <SearchBox />
+        <div className="header-controls">
+          <button
+            className="header-nav-btn"
+            onClick={() => navigate({ kind: "foreign-principals-browse" })}
+          >
+            Browse foreign principals
+          </button>
+        </div>
       </header>
 
       <main className="main">
@@ -35,6 +44,7 @@ export default function App() {
         {view.kind === "foreign-principal-group" && (
           <ForeignPrincipalGroupView name={view.name} country={view.country} />
         )}
+        {view.kind === "foreign-principals-browse" && <ForeignPrincipalsBrowseView />}
         {view.kind === "document" && <DocumentView id={view.id} />}
         {view.kind === "document-search" && <DocumentSearchView q={view.q} />}
         {view.kind === "country" && <CountryView name={view.name} />}

@@ -62,7 +62,11 @@ export interface ForeignPrincipal {
   state: string | null;
   registration_date: string | null;
   termination_date: string | null;
+  registrant_name: string;
+  registrant_status: "active" | "terminated";
 }
+
+export type ForeignPrincipalSort = "registration_date_desc" | "name_asc" | "country_asc";
 
 export interface ForeignPrincipalByNameGroup {
   foreign_principal_name: string;
@@ -257,6 +261,10 @@ export const api = {
   foreignPrincipal: (id: number) => get<ForeignPrincipal>(`/api/foreign-principals/${id}`),
   foreignPrincipalsByName: (name: string, country?: string) =>
     get<ForeignPrincipalByNameGroup[]>(`/api/foreign-principals/by-name${qs({ name, country })}`),
+  searchForeignPrincipals: (params: {
+    q?: string; country?: string; status?: "active" | "terminated"; sort?: ForeignPrincipalSort;
+    offset?: number; limit?: number;
+  }) => get<Page<ForeignPrincipal>>(`/api/foreign-principals${qs(params)}`),
 
   document: (id: number) => get<RegistrantDoc>(`/api/documents/${id}`),
   documentText: (id: number) => get<DocumentText>(`/api/documents/${id}/text`),

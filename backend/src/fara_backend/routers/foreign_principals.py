@@ -9,29 +9,48 @@ from fara_backend.schemas import ForeignPrincipal, ForeignPrincipalByNameGroup, 
 router = APIRouter(prefix="/foreign-principals", tags=["foreign-principals"])
 
 
+_FP_SELECT = (
+    "SELECT fp.*, r.name AS registrant_name, r.status AS registrant_status "
+    "FROM foreign_principals fp JOIN registrants r ON r.registrant_id = fp.registrant_id"
+)
+
+
 @router.get("", response_model=Page[ForeignPrincipal])
 def list_foreign_principals(
     jurisdiction: str = Query("fara"),
     country: str | None = None,
     q: str | None = None,
+    status: str | None = Query(None, pattern="^(active|terminated)$"),
+    sort: str = Query("registration_date_desc", pattern="^(registration_date_desc|name_asc|country_asc)$"),
     limit: int = Query(25, ge=1, le=100),
     offset: int = Query(0, ge=0),
     conn: psycopg.Connection = Depends(get_db),
 ) -> Page[ForeignPrincipal]:
-    where = ["jurisdiction = %(jurisdiction)s"]
+    where = ["fp.jurisdiction = %(jurisdiction)s"]
     params: dict = {"jurisdiction": jurisdiction, "limit": limit, "offset": offset}
     if country:
-        where.append("country_raw = %(country)s")
+        where.append("fp.country_raw = %(country)s")
         params["country"] = country
     if q:
-        where.append("foreign_principal_name ILIKE %(q)s")
+        where.append("fp.foreign_principal_name ILIKE %(q)s")
         params["q"] = f"%{q}%"
+    if status:
+        where.append("r.status = %(status)s")
+        params["status"] = status
     where_sql = " AND ".join(where)
+    order_sql = {
+        "registration_date_desc": "fp.registration_date DESC NULLS LAST",
+        "name_asc": "fp.foreign_principal_name ASC",
+        "country_asc": "fp.country_raw ASC NULLS LAST, fp.foreign_principal_name ASC",
+    }[sort]
 
-    total = conn.execute(f"SELECT count(*) AS n FROM foreign_principals WHERE {where_sql}", params).fetchone()["n"]
+    total = conn.execute(
+        f"SELECT count(*) AS n FROM foreign_principals fp JOIN registrants r ON r.registrant_id = fp.registrant_id "
+        f"WHERE {where_sql}",
+        params,
+    ).fetchone()["n"]
     rows = conn.execute(
-        f"SELECT * FROM foreign_principals WHERE {where_sql} "
-        "ORDER BY registration_date DESC NULLS LAST LIMIT %(limit)s OFFSET %(offset)s",
+        f"{_FP_SELECT} WHERE {where_sql} ORDER BY {order_sql} LIMIT %(limit)s OFFSET %(offset)s",
         params,
     ).fetchall()
     return Page(items=[ForeignPrincipal(**r) for r in rows], total=total, limit=limit, offset=offset)
@@ -80,7 +99,7 @@ def get_foreign_principal(
     foreign_principal_id: int, jurisdiction: str = Query("fara"), conn: psycopg.Connection = Depends(get_db)
 ) -> ForeignPrincipal:
     row = conn.execute(
-        "SELECT * FROM foreign_principals WHERE jurisdiction = %s AND foreign_principal_id = %s",
+        f"{_FP_SELECT} WHERE fp.jurisdiction = %s AND fp.foreign_principal_id = %s",
         (jurisdiction, foreign_principal_id),
     ).fetchone()
     if row is None:
