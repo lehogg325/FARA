@@ -29,6 +29,28 @@ function registrantSize(node: GraphNode): number {
   return BACKBONE_SIZE.registrant + Math.min(Math.sqrt(activity), 12);
 }
 
+// Rescales every node position so the graph is centered at (0,0) and its
+// larger dimension spans exactly 1 unit — a fixed, known coordinate range
+// regardless of what scale forceAtlas2 happened to spread nodes across.
+// This replaces computing a camera ratio from the raw (unnormalized, highly
+// variable) layout output, which was landing on wildly-zoomed-out views —
+// the actual bug behind "unreadable" / "not zoomed in": a correct-looking
+// ratio calculation applied to the wrong input still zooms out too far.
+function normalizePositions(graph: Graph): void {
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  graph.forEachNode((_, a) => {
+    minX = Math.min(minX, a.x); maxX = Math.max(maxX, a.x);
+    minY = Math.min(minY, a.y); maxY = Math.max(maxY, a.y);
+  });
+  if (!isFinite(minX)) return;
+  const span = Math.max(maxX - minX, maxY - minY, 0.001);
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+  graph.forEachNode((n, a) => {
+    graph.setNodeAttribute(n, "x", (a.x - cx) / span);
+    graph.setNodeAttribute(n, "y", (a.y - cy) / span);
+  });
+}
+
 function buildBackboneGraph(data: CountryGraph): Graph {
   const graph = new Graph({ multi: true, type: "directed" });
   for (const n of data.nodes) {
@@ -44,26 +66,25 @@ function buildBackboneGraph(data: CountryGraph): Graph {
   }
   for (const e of data.edges) {
     if (graph.hasNode(e.source) && graph.hasNode(e.target)) {
-      graph.addEdge(e.source, e.target, { size: 1, color: "#8c8c8c", edgeType: e.edge_type });
+      graph.addEdge(e.source, e.target, { size: 1.5, color: "#c8c8c8", edgeType: e.edge_type });
     }
   }
-  if (graph.order > 1) forceAtlas2.assign(graph, { iterations: 250, settings: { gravity: 1, scalingRatio: 12 } });
+  if (graph.order > 1) {
+    forceAtlas2.assign(graph, { iterations: 250, settings: { gravity: 1, scalingRatio: 12 } });
+    normalizePositions(graph);
+  }
   return graph;
 }
 
-function fitViewToNodes(renderer: Sigma, graph: Graph): void {
-  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-  graph.forEachNode((_, attrs) => {
-    minX = Math.min(minX, attrs.x); maxX = Math.max(maxX, attrs.x);
-    minY = Math.min(minY, attrs.y); maxY = Math.max(maxY, attrs.y);
-  });
-  if (!isFinite(minX)) return;
-  const camera = renderer.getCamera();
-  camera.setState({
-    x: (minX + maxX) / 2,
-    y: (minY + maxY) / 2,
-    ratio: Math.max((maxX - minX), (maxY - minY), 0.1) / 1.6,
-  });
+// Fixed, predictable camera state (not derived from raw layout coordinates,
+// which is what produced the wrong zoom before) — the graph is normalized
+// to span ~1 unit above, so ratio just past 1 reliably shows the whole thing
+// filling most of the viewport with a small margin, i.e. actually zoomed in.
+function fitViewToNodes(renderer: Sigma): void {
+  // Biased toward tighter framing on purpose: the prior bug produced views
+  // that were far too zoomed OUT, so erring toward "too close, scroll out a
+  // touch" is the safer direction to be wrong in than repeating that mistake.
+  renderer.getCamera().setState({ x: 0, y: 0, ratio: 1.0 });
 }
 
 // New nodes from an expansion land in a small ring around the registrant that
@@ -165,7 +186,7 @@ export function GraphView({ countryName, data }: { countryName: string; data: Co
       },
     });
     sigmaRef.current = renderer;
-    fitViewToNodes(renderer, graph);
+    fitViewToNodes(renderer);
 
     renderer.on("enterNode", ({ node }) => { hoveredRef.current = node; renderer.refresh(); });
     renderer.on("leaveNode", () => { hoveredRef.current = null; renderer.refresh(); });
