@@ -164,6 +164,12 @@ class GraphNode(BaseModel):
     node_type: str  # 'foreign_principal' | 'registrant' | 'contact' | 'recipient'
     label: str
     registration_number: int | None = None
+    # Populated on 'registrant' nodes in the backbone graph — how active that
+    # registrant is, so the frontend can size/color without needing the
+    # individual contact/recipient nodes loaded yet.
+    contact_count: int | None = None
+    contribution_count: int | None = None
+    contribution_total: float | None = None
 
 
 class GraphEdge(BaseModel):
@@ -180,7 +186,29 @@ class CountryGraph(BaseModel):
     country_name: str
     nodes: list[GraphNode]
     edges: list[GraphEdge]
-    truncated: bool
+    # How many additional (lower-activity) registrants exist for this country
+    # beyond what's shown — 0 when nothing was omitted. Replaces a binary
+    # 'truncated' flag with an honest, importance-ordered count.
+    omitted_registrant_count: int = 0
+
+
+class RegistrantExpansion(BaseModel):
+    registrant_id: int
+    nodes: list[GraphNode]
+    edges: list[GraphEdge]
+
+
+class TopContact(BaseModel):
+    contact_name_raw: str
+    occurrence_count: int
+    sample_registrant_doc_ids: list[int]
+
+
+class TopRecipient(BaseModel):
+    recipient_raw: str
+    occurrence_count: int
+    total_amount: float | None
+    sample_registrant_doc_ids: list[int]
 
 
 class DatasetStatus(BaseModel):

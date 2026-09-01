@@ -4,8 +4,16 @@ import psycopg
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from fara_backend.db import get_db
-from fara_backend.graph import build_country_graph
-from fara_backend.schemas import Country, CountryDetail, CountryGraph, Topic, TopicCount
+from fara_backend.graph import build_country_graph, build_registrant_expansion, top_contacts, top_recipients
+from fara_backend.schemas import (
+    Country,
+    CountryDetail,
+    CountryGraph,
+    RegistrantExpansion,
+    TopContact,
+    TopicCount,
+    TopRecipient,
+)
 
 router = APIRouter(prefix="/countries", tags=["countries"])
 
@@ -109,3 +117,33 @@ def get_country_graph(
     country_name: str, jurisdiction: str = Query("fara"), conn: psycopg.Connection = Depends(get_db)
 ) -> CountryGraph:
     return build_country_graph(conn, jurisdiction, country_name)
+
+
+@router.get("/{country_name}/graph/registrants/{registrant_id}/expand", response_model=RegistrantExpansion)
+def expand_registrant(
+    country_name: str, registrant_id: int, jurisdiction: str = Query("fara"),
+    conn: psycopg.Connection = Depends(get_db),
+) -> RegistrantExpansion:
+    owned = conn.execute(
+        "SELECT 1 FROM foreign_principals WHERE jurisdiction = %s AND country_raw = %s AND registrant_id = %s",
+        (jurisdiction, country_name, registrant_id),
+    ).fetchone()
+    if owned is None:
+        raise HTTPException(status_code=404, detail="registrant not found for this country")
+    return build_registrant_expansion(conn, registrant_id)
+
+
+@router.get("/{country_name}/top-contacts", response_model=list[TopContact])
+def get_top_contacts(
+    country_name: str, jurisdiction: str = Query("fara"), limit: int = Query(25, ge=1, le=100),
+    conn: psycopg.Connection = Depends(get_db),
+) -> list[TopContact]:
+    return top_contacts(conn, jurisdiction, country_name, limit)
+
+
+@router.get("/{country_name}/top-recipients", response_model=list[TopRecipient])
+def get_top_recipients(
+    country_name: str, jurisdiction: str = Query("fara"), limit: int = Query(25, ge=1, le=100),
+    conn: psycopg.Connection = Depends(get_db),
+) -> list[TopRecipient]:
+    return top_recipients(conn, jurisdiction, country_name, limit)

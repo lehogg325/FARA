@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { GraphView } from "./GraphView";
+import { TopEntityList } from "./TopEntityList";
 import { useStore } from "../state/store";
 
 export function CountryView({ name }: { name: string }) {
@@ -79,8 +80,10 @@ export function CountryView({ name }: { name: string }) {
       <div className="section">
         <div className="section-title">Reportable-contact network</div>
         {graph.isLoading && <div className="loading">Loading graph…</div>}
-        {graph.data && <GraphView data={graph.data} />}
+        {graph.data && <GraphView countryName={name} data={graph.data} />}
       </div>
+
+      <TopEntityList countryName={name} />
     </div>
   );
 }

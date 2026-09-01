@@ -2,27 +2,64 @@ from __future__ import annotations
 
 import psycopg
 
-from fara_backend.schemas import CountryGraph, GraphEdge, GraphNode
+from fara_backend.schemas import CountryGraph, GraphEdge, GraphNode, RegistrantExpansion, TopContact, TopRecipient
 
-# Defensive backstop, not a routine truncation — the graph is scoped to
-# registrants with actual reportable-contact activity (below), which keeps
-# even the busiest country's real network small.
-NODE_CAP = 1500
+# Comfortably above every real country's backbone measured live (docs/phase2.md) —
+# Japan, the busiest, is 136 registrant+foreign-principal nodes. A genuine backstop,
+# not a routine truncation; when it does trigger, registrants are kept by activity
+# (contact_count + contribution_count), not list order.
+BACKBONE_CAP = 150
+
+# A single registrant's own contact/recipient activity is inherently bounded (even
+# the largest real PR-campaign filing found live has 105 contact rows) — this is a
+# defensive backstop, not an expected truncation.
+EXPANSION_CAP = 500
 
 
 def _norm(text: str) -> str:
     return " ".join(text.strip().lower().split())
 
 
-def build_country_graph(conn: psycopg.Connection, jurisdiction: str, country_name: str) -> CountryGraph:
-    # Confirmed live (docs/phase2.md): a populous country's foreign-principal
-    # roster (e.g. China: 277) is dominated by registrants with nothing beyond
-    # a bare "represents" relationship — no contact or contribution activity
-    # at all. That full roster is already served by /registrants and
-    # /foreign-principals; this graph is specifically the *reportable-contact*
-    # network the plan asked for, so it's scoped to registrants that actually
-    # have a contact or contribution row, not every registration on file.
-    active_registrant_ids_row = conn.execute(
+def _registrant_activity(conn: psycopg.Connection, registrant_ids: list[int]) -> dict[int, dict]:
+    """contact_count / contribution_count / contribution_total per registrant —
+    two separate grouped queries, not one multi-join, so that joining both
+    reportable_contacts and document_extracted_fields on the same doc doesn't
+    fan out and double-count/double-sum either side."""
+    if not registrant_ids:
+        return {}
+
+    stats: dict[int, dict] = {rid: {"contact_count": 0, "contribution_count": 0, "contribution_total": None} for rid in registrant_ids}
+
+    for row in conn.execute(
+        """
+        SELECT rd.registrant_id, count(*) AS n
+        FROM reportable_contacts rc
+        JOIN registrant_docs rd ON rd.registrant_doc_id = rc.registrant_doc_id
+        WHERE rd.registrant_id = ANY(%s)
+        GROUP BY rd.registrant_id
+        """,
+        (registrant_ids,),
+    ).fetchall():
+        stats[row["registrant_id"]]["contact_count"] = row["n"]
+
+    for row in conn.execute(
+        """
+        SELECT rd.registrant_id, count(*) AS n, sum(def.field_value_numeric) AS total
+        FROM document_extracted_fields def
+        JOIN registrant_docs rd ON rd.registrant_doc_id = def.registrant_doc_id
+        WHERE rd.registrant_id = ANY(%s) AND def.field_key LIKE 'political_contribution[%%'
+        GROUP BY rd.registrant_id
+        """,
+        (registrant_ids,),
+    ).fetchall():
+        stats[row["registrant_id"]]["contribution_count"] = row["n"]
+        stats[row["registrant_id"]]["contribution_total"] = row["total"]
+
+    return stats
+
+
+def _active_registrant_ids(conn: psycopg.Connection, jurisdiction: str, country_name: str) -> list[int]:
+    row = conn.execute(
         """
         SELECT array_agg(DISTINCT rd.registrant_id) AS ids
         FROM registrant_docs rd
@@ -38,52 +75,33 @@ def build_country_graph(conn: psycopg.Connection, jurisdiction: str, country_nam
         """,
         {"j": jurisdiction, "country": country_name},
     ).fetchone()
-    registrant_ids = active_registrant_ids_row["ids"] or []
+    return row["ids"] or []
 
+
+def build_country_graph(conn: psycopg.Connection, jurisdiction: str, country_name: str) -> CountryGraph:
+    all_ids = _active_registrant_ids(conn, jurisdiction, country_name)
+    activity = _registrant_activity(conn, all_ids)
+
+    ranked = sorted(all_ids, key=lambda rid: -(activity[rid]["contact_count"] + activity[rid]["contribution_count"]))
+    shown_ids = ranked[:BACKBONE_CAP]
+    omitted_registrant_count = max(0, len(ranked) - BACKBONE_CAP)
+
+    registrants = (
+        conn.execute(
+            "SELECT registrant_id, name, registration_number FROM registrants WHERE registrant_id = ANY(%s)",
+            (shown_ids,),
+        ).fetchall()
+        if shown_ids
+        else []
+    )
     fps = (
         conn.execute(
             "SELECT foreign_principal_id, registrant_id, foreign_principal_name, registration_number "
             "FROM foreign_principals WHERE jurisdiction = %(j)s AND country_raw = %(country)s "
             "AND registrant_id = ANY(%(ids)s)",
-            {"j": jurisdiction, "country": country_name, "ids": registrant_ids},
+            {"j": jurisdiction, "country": country_name, "ids": shown_ids},
         ).fetchall()
-        if registrant_ids
-        else []
-    )
-    registrants = (
-        conn.execute(
-            "SELECT registrant_id, name, registration_number FROM registrants WHERE registrant_id = ANY(%s)",
-            (registrant_ids,),
-        ).fetchall()
-        if registrant_ids
-        else []
-    )
-    contacts = (
-        conn.execute(
-            """
-            SELECT rc.registrant_doc_id, rd.registrant_id, rc.contact_date, rc.contact_date_raw,
-                   rc.contact_name_raw, rc.purpose
-            FROM reportable_contacts rc
-            JOIN registrant_docs rd ON rd.registrant_doc_id = rc.registrant_doc_id
-            WHERE rd.registrant_id = ANY(%s)
-            """,
-            (registrant_ids,),
-        ).fetchall()
-        if registrant_ids
-        else []
-    )
-    contributions = (
-        conn.execute(
-            """
-            SELECT def.registrant_doc_id, rd.registrant_id, def.field_value_text,
-                   def.field_value_numeric, def.field_value_date
-            FROM document_extracted_fields def
-            JOIN registrant_docs rd ON rd.registrant_doc_id = def.registrant_doc_id
-            WHERE rd.registrant_id = ANY(%s) AND def.field_key LIKE 'political_contribution[%%'
-            """,
-            (registrant_ids,),
-        ).fetchall()
-        if registrant_ids
+        if shown_ids
         else []
     )
 
@@ -92,8 +110,11 @@ def build_country_graph(conn: psycopg.Connection, jurisdiction: str, country_nam
 
     for r in registrants:
         node_id = f"registrant:{r['registrant_id']}"
+        a = activity[r["registrant_id"]]
         nodes[node_id] = GraphNode(
-            id=node_id, node_type="registrant", label=r["name"], registration_number=r["registration_number"]
+            id=node_id, node_type="registrant", label=r["name"], registration_number=r["registration_number"],
+            contact_count=a["contact_count"], contribution_count=a["contribution_count"],
+            contribution_total=a["contribution_total"],
         )
 
     for fp in fps:
@@ -106,9 +127,40 @@ def build_country_graph(conn: psycopg.Connection, jurisdiction: str, country_nam
         if target in nodes:
             edges.append(GraphEdge(source=node_id, target=target, edge_type="represents", registrant_doc_id=None))
 
+    return CountryGraph(
+        country_name=country_name, nodes=list(nodes.values()), edges=edges,
+        omitted_registrant_count=omitted_registrant_count,
+    )
+
+
+def build_registrant_expansion(conn: psycopg.Connection, registrant_id: int) -> RegistrantExpansion:
+    source = f"registrant:{registrant_id}"
+    contacts = conn.execute(
+        """
+        SELECT rc.registrant_doc_id, rc.contact_date, rc.contact_name_raw, rc.purpose
+        FROM reportable_contacts rc
+        JOIN registrant_docs rd ON rd.registrant_doc_id = rc.registrant_doc_id
+        WHERE rd.registrant_id = %s
+        LIMIT %s
+        """,
+        (registrant_id, EXPANSION_CAP),
+    ).fetchall()
+    contributions = conn.execute(
+        """
+        SELECT def.registrant_doc_id, def.field_value_text, def.field_value_numeric, def.field_value_date
+        FROM document_extracted_fields def
+        JOIN registrant_docs rd ON rd.registrant_doc_id = def.registrant_doc_id
+        WHERE rd.registrant_id = %s AND def.field_key LIKE 'political_contribution[%%'
+        LIMIT %s
+        """,
+        (registrant_id, EXPANSION_CAP),
+    ).fetchall()
+
+    nodes: dict[str, GraphNode] = {}
+    edges: list[GraphEdge] = []
+
     for c in contacts:
-        source = f"registrant:{c['registrant_id']}"
-        if source not in nodes or not c["contact_name_raw"]:
+        if not c["contact_name_raw"]:
             continue
         target = f"contact:{_norm(c['contact_name_raw'])}"
         if target not in nodes:
@@ -121,8 +173,7 @@ def build_country_graph(conn: psycopg.Connection, jurisdiction: str, country_nam
         )
 
     for con in contributions:
-        source = f"registrant:{con['registrant_id']}"
-        if source not in nodes or not con["field_value_text"]:
+        if not con["field_value_text"]:
             continue
         target = f"recipient:{_norm(con['field_value_text'])}"
         if target not in nodes:
@@ -134,11 +185,54 @@ def build_country_graph(conn: psycopg.Connection, jurisdiction: str, country_nam
             )
         )
 
-    node_list = list(nodes.values())
-    truncated = len(node_list) > NODE_CAP
-    if truncated:
-        kept_ids = {n.id for n in node_list[:NODE_CAP]}
-        node_list = node_list[:NODE_CAP]
-        edges = [e for e in edges if e.source in kept_ids and e.target in kept_ids]
+    return RegistrantExpansion(registrant_id=registrant_id, nodes=list(nodes.values()), edges=edges)
 
-    return CountryGraph(country_name=country_name, nodes=node_list, edges=edges, truncated=truncated)
+
+# Same normalization as _norm() above, expressed in SQL for GROUP BY — deliberately
+# kept in exact lockstep (strip, lowercase, collapse internal whitespace) so a
+# contact/recipient's count here matches its node degree in the expanded graph.
+_NORM_SQL = "lower(regexp_replace(trim({col}), '\\s+', ' ', 'g'))"
+
+
+def top_contacts(conn: psycopg.Connection, jurisdiction: str, country_name: str, limit: int) -> list[TopContact]:
+    rows = conn.execute(
+        f"""
+        SELECT (array_agg(contact_name_raw))[1] AS contact_name_raw, count(*) AS occurrence_count,
+               (array_agg(DISTINCT registrant_doc_id))[1:5] AS sample_registrant_doc_ids
+        FROM (
+            SELECT rc.registrant_doc_id, rc.contact_name_raw, {_NORM_SQL.format(col='rc.contact_name_raw')} AS norm_name
+            FROM reportable_contacts rc
+            JOIN registrant_docs rd ON rd.registrant_doc_id = rc.registrant_doc_id
+            JOIN foreign_principals fp ON fp.registrant_id = rd.registrant_id
+            WHERE fp.jurisdiction = %(j)s AND fp.country_raw = %(country)s
+        ) t
+        GROUP BY norm_name
+        ORDER BY occurrence_count DESC
+        LIMIT %(limit)s
+        """,
+        {"j": jurisdiction, "country": country_name, "limit": limit},
+    ).fetchall()
+    return [TopContact(**r) for r in rows]
+
+
+def top_recipients(conn: psycopg.Connection, jurisdiction: str, country_name: str, limit: int) -> list[TopRecipient]:
+    rows = conn.execute(
+        f"""
+        SELECT (array_agg(field_value_text))[1] AS recipient_raw, count(*) AS occurrence_count,
+               sum(field_value_numeric) AS total_amount,
+               (array_agg(DISTINCT registrant_doc_id))[1:5] AS sample_registrant_doc_ids
+        FROM (
+            SELECT def.registrant_doc_id, def.field_value_text, def.field_value_numeric,
+                   {_NORM_SQL.format(col='def.field_value_text')} AS norm_name
+            FROM document_extracted_fields def
+            JOIN registrant_docs rd ON rd.registrant_doc_id = def.registrant_doc_id
+            JOIN foreign_principals fp ON fp.registrant_id = rd.registrant_id
+            WHERE fp.jurisdiction = %(j)s AND fp.country_raw = %(country)s AND def.field_key LIKE 'political_contribution[%%'
+        ) t
+        GROUP BY norm_name
+        ORDER BY occurrence_count DESC
+        LIMIT %(limit)s
+        """,
+        {"j": jurisdiction, "country": country_name, "limit": limit},
+    ).fetchall()
+    return [TopRecipient(**r) for r in rows]

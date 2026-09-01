@@ -183,6 +183,9 @@ export interface GraphNode {
   node_type: GraphNodeType;
   label: string;
   registration_number: number | null;
+  contact_count: number | null;
+  contribution_count: number | null;
+  contribution_total: number | null;
 }
 
 export interface GraphEdge {
@@ -199,7 +202,26 @@ export interface CountryGraph {
   country_name: string;
   nodes: GraphNode[];
   edges: GraphEdge[];
-  truncated: boolean;
+  omitted_registrant_count: number;
+}
+
+export interface RegistrantExpansion {
+  registrant_id: number;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
+export interface TopContact {
+  contact_name_raw: string;
+  occurrence_count: number;
+  sample_registrant_doc_ids: number[];
+}
+
+export interface TopRecipient {
+  recipient_raw: string;
+  occurrence_count: number;
+  total_amount: number | null;
+  sample_registrant_doc_ids: number[];
 }
 
 async function get<T>(url: string, signal?: AbortSignal): Promise<T> {
@@ -246,5 +268,13 @@ export const api = {
   country: (name: string) => get<CountryDetail>(`/api/countries/${encodeURIComponent(name)}`),
   countryTopics: (name: string) => get<TopicCount[]>(`/api/countries/${encodeURIComponent(name)}/topics`),
   countryGraph: (name: string) => get<CountryGraph>(`/api/countries/${encodeURIComponent(name)}/graph`),
+  expandRegistrant: (countryName: string, registrantId: number) =>
+    get<RegistrantExpansion>(
+      `/api/countries/${encodeURIComponent(countryName)}/graph/registrants/${registrantId}/expand`,
+    ),
+  topContacts: (name: string, limit = 25) =>
+    get<TopContact[]>(`/api/countries/${encodeURIComponent(name)}/top-contacts${qs({ limit })}`),
+  topRecipients: (name: string, limit = 25) =>
+    get<TopRecipient[]>(`/api/countries/${encodeURIComponent(name)}/top-recipients${qs({ limit })}`),
   topics: () => get<Topic[]>("/api/topics"),
 };
