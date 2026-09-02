@@ -4,10 +4,13 @@
 
 Done, verified against the real accounts:
 
-- **Supabase project created, schema fully migrated, seed data loaded** (273 countries,
-  10 document types, 20 topics, 1 jurisdiction) — verified by pointing a real backend
-  instance at it and confirming `/api/meta` and `/api/countries` respond correctly. No
-  FARA data loaded yet (that's the ingest workflows' job, gated on object storage below).
+- **Supabase project created, schema fully migrated, real data loaded.** The full bulk
+  dataset is live: 7,078 registrants, 17,726 foreign principals, 44,597 short-form
+  registrants, 153,266 registrant documents (plus 273 countries / 10 document types /
+  20 topics reference data). Verified two ways: `/api/meta`'s `datasets` array reports
+  all four loads `succeeded` with matching row counts, and `/api/search?q=Ballard`
+  against the live database returns the real grouped "Ballard Partners" result
+  (`group_count: 2`) the search-dedup work earlier in this conversation was built for.
 - **GitHub Actions secrets `DATABASE_URL` (session pooler) and `ANTHROPIC_API_KEY`** are
   set on the repo.
 - **One Vercel project, not two** — matching `github.com/lehogg325/LDA`'s proven setup:
@@ -30,12 +33,29 @@ Done, verified against the real accounts:
   connection-tested for real: `list_buckets()` and a full write/read/delete round trip
   through the actual `ObjectStoreArchive` class both succeeded. All four
   `FARA_STORAGE_*` GitHub Actions secrets are set.
-- **`ingest-bulk` triggered for real** via `workflow_dispatch` once all the secrets were
-  in place — see the Actions tab for the outcome; this is the first real run since two
-  earlier *scheduled* runs failed outright (no secrets existed yet at that point).
+- **`ingest-bulk` triggered for real, twice.** Two earlier *scheduled* runs had failed
+  outright (no secrets existed yet). The first `workflow_dispatch` run once secrets were
+  in place got through `registrants` (3m42s) and `foreign_principals` (8m23s) before
+  hitting the workflow's 30-minute timeout partway through `short_form_registrants` —
+  see "Fixed a real production-scale performance bug" below. After that fix, a second
+  run completed **all four datasets in 2m32s total**, including the cross-check against
+  the live JSON poll.
+- **Fixed a real production-scale performance bug the first run surfaced.**
+  `registrants`/`foreign_principals`/`short_form_registrants` used a per-row
+  SELECT-then-INSERT/UPDATE loop — fine against local Postgres, but ~30 rows/sec against
+  Supabase's real session-pooler latency (2 round trips/row). `registrant_docs` had
+  already hit and fixed this exact problem (migration 0003); the other three now use the
+  same staging-table + bulk COPY + set-based-SQL pattern (migration 0006). Also found and
+  fixed a real double-counting bug this surfaced in *all four* loaders, including the
+  already-shipped `registrant_docs` one: the "touch unchanged" statement ran after
+  "update changed", but "update changed" also overwrites `source_row_hash` to match the
+  incoming row — making the row it just updated trivially match "touch unchanged"'s
+  hash-equality condition too. Caught by a real test assertion, fixed by reordering.
 
 Still blocked on one manual step only doable from your account: importing the single
-Vercel project.
+Vercel project. `docs-and-extract.yml` (PDF download + OCR + LLM extraction) hasn't been
+triggered yet — deliberately left for you to kick off explicitly, since it spends real
+Anthropic API credit.
 
 ## Architecture
 
@@ -136,9 +156,10 @@ same same-origin problem two different ways, so `client.ts`'s API calls stay rel
 Historical backfill (`fara-ingest docs --mode backfill`, `fara-extract ... --mode
 backfill`) is never invoked by any of these — it's a manual, local (or
 `workflow_dispatch`-triggered, if ever wanted) operation, decoupled from the schedule.
-None of the three has been triggered yet — worth a manual `workflow_dispatch` run once
-Supabase Storage is wired up, both to smoke-test it and to get real data into the
-now-empty production database rather than waiting for the next scheduled run.
+`ingest-bulk` has been run successfully (Status above) and the daily schedule will keep
+it current from here. `ingest-poll` and `docs-and-extract` haven't been triggered yet —
+the latter deliberately, since it spends real Anthropic API credit; worth a manual
+`workflow_dispatch` run when you're ready rather than waiting for Monday.
 
 ## Verifying it actually runs unattended
 
