@@ -43,6 +43,38 @@ never populating a single contact or topic. Fixed by adding `fara-extract contac
 narrative fields that only `fields-llm` produces; contacts only needs `document_text`
 from the `text` stage, so it's a safe, correctly-ordered append).
 
+Triggered the fixed workflow manually (`gh workflow run docs-and-extract.yml`) to
+smoke-test it — all 6 stages succeeded, but the LLM-dependent stages (`fields_llm`,
+the LLM half of `contacts`) failed with `Your credit balance is too low to access the
+Anthropic API`. Root cause, not this session's spend: an existing local backfill (see
+below) had already run against the same Anthropic account and used up its balance.
+
+**Migrated an existing local backfill instead of re-running it.** The local dev
+Postgres (`docker-compose.yml`, port 5434) already had a real `--mode backfill
+--from-date 2025-01-01`-equivalent run sitting in it — 8,995 documents with text
+extracted, 4,062 with rule-based fields, 784 with LLM narrative fields, 2,033 with
+reportable contacts, 699 with topics classified, covering 2025-01-01 through
+2026-08-19. Rather than burning more Anthropic credit re-doing that work against
+Supabase, migrated the result rows directly: `registrant_doc_id` is a `bigserial`
+surrogate key that doesn't line up between two independently-loaded databases, so the
+migration joins on the documented natural key
+(`ux_registrant_docs_natural_key` — jurisdiction, registration_number,
+document_type_raw_label, date_stamped_raw, url, short_form_name,
+foreign_principal_name) to map local IDs to Supabase IDs first — verified a 100% match
+(8,995/8,995) before writing anything. Copied `document_text`,
+`document_extracted_fields`, `reportable_contacts`, `document_topics`, and
+`extraction_runs` (the last one is what makes future scheduled runs skip
+already-done documents instead of re-paying for them) with `ON CONFLICT DO NOTHING`
+per each table's real unique constraint. Deliberately did **not** copy
+`registrant_docs.pdf_object_key`/etc. — those would reference PDF bytes that only
+exist in local `LocalArchive` storage, not Supabase Storage; leaving them null means
+`/api/meta`'s `text` stage `eligible_count` undercounts (cosmetic only — nothing
+depends on it for correctness, since candidate-selection queries check
+`extraction_runs.status='succeeded'`, not `pdf_object_key`). Verified live post-migration:
+`/api/countries/JAPAN/graph` returns a real 136-node/91-edge network,
+`/api/countries/JAPAN/topics` returns real classified breakdowns
+(Media Relations 107 docs, Diplomatic & Bilateral Relations 76, ...).
+
 Done, verified against the real accounts:
 
 - **Supabase project created, schema fully migrated, real data loaded.** The full bulk
