@@ -13,9 +13,10 @@ def sha256_bytes(data: bytes) -> str:
 @runtime_checkable
 class RawArchive(Protocol):
     """The exists()/write_atomic()/read_bytes() surface every raw-archive
-    backend implements — LocalArchive here, R2Archive (fara_ingest.r2_archive)
-    in CI/production. Callers type-hint against this, not a concrete backend,
-    since fara_ingest.archive_factory.get_archive() picks between them."""
+    backend implements — LocalArchive here, ObjectStoreArchive
+    (fara_ingest.object_store_archive) in CI/production. Callers type-hint
+    against this, not a concrete backend, since
+    fara_ingest.archive_factory.get_archive() picks between them."""
 
     def exists(self, key: str) -> bool: ...
     def write_atomic(self, key: str, data: bytes) -> object: ...
@@ -27,7 +28,7 @@ class LocalArchive:
 
     Keys are forward-slash-separated strings, e.g.
     "fara/bulk/registrants/date=2026-08-21/FARA_All_Registrants.csv.zip".
-    A future object-storage backend (Deployment: Cloudflare R2) implements
+    ObjectStoreArchive (any S3-compatible bucket — see docs/deploy.md) implements
     the same exists()/write_atomic()/read_bytes() surface so callers never change.
 
     Every bulk file here is small enough (a few MB at most) to hold entirely in

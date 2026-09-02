@@ -14,12 +14,12 @@ on:
 env:
   DATABASE_URL: ${{ secrets.DATABASE_URL }}
   ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-  FARA_R2_BUCKET: ${{ secrets.FARA_R2_BUCKET }}
-  FARA_R2_ENDPOINT_URL: ${{ secrets.FARA_R2_ENDPOINT_URL }}
-  FARA_R2_ACCESS_KEY_ID: ${{ secrets.FARA_R2_ACCESS_KEY_ID }}
-  FARA_R2_SECRET_ACCESS_KEY: ${{ secrets.FARA_R2_SECRET_ACCESS_KEY }}
-  AWS_ACCESS_KEY_ID: ${{ secrets.FARA_R2_ACCESS_KEY_ID }}
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.FARA_R2_SECRET_ACCESS_KEY }}
+  FARA_STORAGE_BUCKET: ${{ secrets.FARA_STORAGE_BUCKET }}
+  FARA_STORAGE_ENDPOINT_URL: ${{ secrets.FARA_STORAGE_ENDPOINT_URL }}
+  FARA_STORAGE_ACCESS_KEY_ID: ${{ secrets.FARA_STORAGE_ACCESS_KEY_ID }}
+  FARA_STORAGE_SECRET_ACCESS_KEY: ${{ secrets.FARA_STORAGE_SECRET_ACCESS_KEY }}
+  AWS_ACCESS_KEY_ID: ${{ secrets.FARA_STORAGE_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.FARA_STORAGE_SECRET_ACCESS_KEY }}
   FARA_INGEST_MANIFEST_PATH: data/manifest.sqlite3
 
 jobs:
@@ -39,11 +39,11 @@ jobs:
       - run: uv python install 3.12
       - run: uv sync --all-packages
 
-      - name: Restore ingest manifest from R2
+      - name: Restore ingest manifest from object storage
         run: |
           mkdir -p data
-          aws s3 cp "s3://$FARA_R2_BUCKET/manifest/manifest.sqlite3" data/manifest.sqlite3 \
-            --endpoint-url "$FARA_R2_ENDPOINT_URL" || echo "no manifest in R2 yet — starting fresh"
+          aws s3 cp "s3://$FARA_STORAGE_BUCKET/manifest/manifest.sqlite3" data/manifest.sqlite3 \
+            --endpoint-url "$FARA_STORAGE_ENDPOINT_URL" || echo "no manifest in storage yet — starting fresh"
 
       - name: Download newly-filed PDFs
         run: uv run fara-ingest docs --mode new
@@ -57,8 +57,8 @@ jobs:
       - name: LLM-assisted narrative fields
         run: uv run fara-extract fields-llm --mode new
 
-      - name: Save ingest manifest to R2
+      - name: Save ingest manifest to object storage
         if: always()
         run: |
-          aws s3 cp data/manifest.sqlite3 "s3://$FARA_R2_BUCKET/manifest/manifest.sqlite3" \
-            --endpoint-url "$FARA_R2_ENDPOINT_URL"
+          aws s3 cp data/manifest.sqlite3 "s3://$FARA_STORAGE_BUCKET/manifest/manifest.sqlite3" \
+            --endpoint-url "$FARA_STORAGE_ENDPOINT_URL"

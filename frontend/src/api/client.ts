@@ -248,14 +248,8 @@ export interface TopRecipient {
   sample_registrant_doc_ids: number[];
 }
 
-// Empty in local dev (Vite's dev-server proxy forwards /api to the backend,
-// see vite.config.ts) and when the frontend is deployed in front of the same
-// origin as the API. Set VITE_API_BASE_URL at build time when the frontend
-// and backend are separate Vercel projects/domains — see docs/deploy.md.
-const API_BASE_URL: string = import.meta.env.VITE_API_BASE_URL ?? "";
-
 async function get<T>(url: string, signal?: AbortSignal): Promise<T> {
-  const r = await fetch(`${API_BASE_URL}${url}`, { signal });
+  const r = await fetch(url, { signal });
   if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
   return r.json() as Promise<T>;
 }

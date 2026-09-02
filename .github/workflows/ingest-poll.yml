@@ -2,17 +2,18 @@ name: ingest-poll
 
 # Every few hours: poll the two working JSON endpoints and archive the raw
 # response verbatim. Diagnostic only — never loads into Postgres (that's
-# ingest-bulk's job) — so this needs R2 credentials but no DATABASE_URL.
+# ingest-bulk's job) — so this needs object-storage credentials but no
+# DATABASE_URL.
 on:
   schedule:
     - cron: "0 */4 * * *" # every 4 hours
   workflow_dispatch: {}
 
 env:
-  FARA_R2_BUCKET: ${{ secrets.FARA_R2_BUCKET }}
-  FARA_R2_ENDPOINT_URL: ${{ secrets.FARA_R2_ENDPOINT_URL }}
-  FARA_R2_ACCESS_KEY_ID: ${{ secrets.FARA_R2_ACCESS_KEY_ID }}
-  FARA_R2_SECRET_ACCESS_KEY: ${{ secrets.FARA_R2_SECRET_ACCESS_KEY }}
+  FARA_STORAGE_BUCKET: ${{ secrets.FARA_STORAGE_BUCKET }}
+  FARA_STORAGE_ENDPOINT_URL: ${{ secrets.FARA_STORAGE_ENDPOINT_URL }}
+  FARA_STORAGE_ACCESS_KEY_ID: ${{ secrets.FARA_STORAGE_ACCESS_KEY_ID }}
+  FARA_STORAGE_SECRET_ACCESS_KEY: ${{ secrets.FARA_STORAGE_SECRET_ACCESS_KEY }}
 
 jobs:
   ingest-poll:

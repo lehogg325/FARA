@@ -5,11 +5,14 @@ from botocore.client import Config as BotoConfig
 from botocore.exceptions import ClientError
 
 
-class R2Archive:
-    """Object-storage raw archive backed by an S3-compatible bucket (Cloudflare
-    R2 in production — docs/deploy.md). Same exists()/write_atomic()/read_bytes()
-    surface as LocalArchive, so ingest/normalize/extract code never branches on
-    which backend is active (see fara_ingest.archive_factory.get_archive).
+class ObjectStoreArchive:
+    """Object-storage raw archive backed by any S3-compatible bucket (Supabase
+    Storage in production — docs/deploy.md; works identically against
+    Cloudflare R2, AWS S3, MinIO, etc., since it only ever uses a custom
+    endpoint_url and never assumes a specific provider). Same
+    exists()/write_atomic()/read_bytes() surface as LocalArchive, so
+    ingest/normalize/extract code never branches on which backend is active
+    (see fara_ingest.archive_factory.get_archive).
 
     A single S3 PUT is already atomic at the object level — an interrupted
     upload simply never produces an object at that key — so, unlike
