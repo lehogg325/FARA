@@ -24,6 +24,25 @@ URLs sit behind Vercel's SSO/deployment-protection wall (redirect to
 `vercel.com/sso-api`) — that's expected and unrelated to this bug. The public,
 unprotected URL is the `fara-ochre.vercel.app` alias.
 
+**Second bug found post-deploy: the Network/Topics tabs showed "no reportable-contact
+activity on file" / "no topics classified yet" for every country.** Traced from
+`frontend/src/components/GraphView.tsx` and `CountryView.tsx` through
+`backend/src/fara_backend/graph.py`'s `build_country_graph()` down to
+`/api/meta`'s `extraction_coverage`, which reported `eligible_count: 0` for every stage
+including `text` — zero documents have ever had a PDF downloaded, confirming
+`docs-and-extract.yml` has genuinely never run (also confirmed via `gh run list`: no
+`docs-and-extract` runs exist). That much is expected, not a bug — deliberately left
+for a manual, cost-conscious trigger (below). But a *real* bug sits underneath it:
+phase 2 (commit `560157b`) added the `fara-extract contacts` and `fara-extract topics`
+CLI stages plus the tables they populate (`reportable_contacts`, `document_topics`) —
+exactly what the Network/Topics tabs read — but never added them as steps to
+`docs-and-extract.yml`, which still only ran `text` → `fields-rules` → `fields-llm`.
+Every future scheduled run would have kept extracting text and fields forever while
+never populating a single contact or topic. Fixed by adding `fara-extract contacts
+--mode new` and `fara-extract topics --mode new` steps after `fields-llm` (topics reads
+narrative fields that only `fields-llm` produces; contacts only needs `document_text`
+from the `text` stage, so it's a safe, correctly-ordered append).
+
 Done, verified against the real accounts:
 
 - **Supabase project created, schema fully migrated, real data loaded.** The full bulk
@@ -173,7 +192,7 @@ same same-origin problem two different ways, so `client.ts`'s API calls stay rel
 |---|---|---|
 | `.github/workflows/ingest-bulk.yml` | daily, 05:00 UTC | 4 bulk CSVs → Postgres; cross-checks against a live JSON poll |
 | `.github/workflows/ingest-poll.yml` | every 4h | diagnostic JSON poll, archived only — never loaded into Postgres |
-| `.github/workflows/docs-and-extract.yml` | weekly, Monday 06:00 UTC | newly-filed PDFs only: download → text/OCR → rule fields → LLM fields |
+| `.github/workflows/docs-and-extract.yml` | weekly, Monday 06:00 UTC | newly-filed PDFs only: download → text/OCR → rule fields → LLM fields → reportable contacts → topics |
 
 Historical backfill (`fara-ingest docs --mode backfill`, `fara-extract ... --mode
 backfill`) is never invoked by any of these — it's a manual, local (or

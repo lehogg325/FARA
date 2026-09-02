@@ -1,11 +1,13 @@
 name: docs-and-extract
 
 # Weekly: download filing PDFs and mine them — text/OCR, then rule-based
-# fields, then LLM-assisted fields. Always the default `new` mode in every
-# command below: only documents filed/discovered since the last successful
-# run. The ~154K pre-existing historical documents are never touched here —
-# that's `--mode backfill`, run manually, never by this schedule
-# (docs/deploy.md).
+# fields, then LLM-assisted fields, then the two stages phase 2 added on top
+# of those fields (reportable-contact extraction, topic classification) —
+# both required for the Network/Topics tabs to show anything. Always the
+# default `new` mode in every command below: only documents filed/discovered
+# since the last successful run. The ~154K pre-existing historical documents
+# are never touched here — that's `--mode backfill`, run manually, never by
+# this schedule (docs/deploy.md).
 on:
   schedule:
     - cron: "0 6 * * 1" # Monday 06:00 UTC
@@ -56,6 +58,12 @@ jobs:
 
       - name: LLM-assisted narrative fields
         run: uv run fara-extract fields-llm --mode new
+
+      - name: Reportable-contact extraction
+        run: uv run fara-extract contacts --mode new
+
+      - name: Topic classification
+        run: uv run fara-extract topics --mode new
 
       - name: Save ingest manifest to object storage
         if: always()
