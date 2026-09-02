@@ -596,6 +596,20 @@ dev = [{ name = "pytest", specifier = ">=8" }]
 name = "fara-workspace"
 version = "0.0.0"
 source = { virtual = "." }
+dependencies = [
+    { name = "fastapi" },
+    { name = "psycopg", extra = ["binary"] },
+    { name = "psycopg-pool" },
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = ">=0.115" },
+    { name = "psycopg", extras = ["binary"], specifier = ">=3.1" },
+    { name = "psycopg-pool", specifier = ">=3.2" },
+    { name = "pydantic", specifier = ">=2" },
+]
 
 [[package]]
 name = "fastapi"

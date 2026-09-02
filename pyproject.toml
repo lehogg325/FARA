@@ -2,7 +2,18 @@
 name = "fara-workspace"
 version = "0.0.0"
 requires-python = ">=3.12"
-dependencies = []
+# Mirrors requirements.txt: Vercel's Python builder prefers this uv-managed
+# root project (pyproject.toml + uv.lock) over requirements.txt whenever both
+# are present, so `uv sync` at the workspace root must itself install the
+# api/index.py serverless function's runtime deps — the workspace's own
+# `dependencies = []` otherwise leaves the deployed function's venv empty of
+# fastapi/psycopg/pydantic even though requirements.txt lists them correctly.
+dependencies = [
+    "fastapi>=0.115",
+    "psycopg[binary]>=3.1",
+    "psycopg-pool>=3.2",
+    "pydantic>=2",
+]
 
 [tool.uv]
 package = false
