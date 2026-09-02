@@ -67,12 +67,17 @@ WHERE {_NATURAL_KEY_JOIN}
   AND rd.source_row_hash IS DISTINCT FROM s.source_row_hash
 """
 
-# Must run BEFORE _INSERT_MISSING_SQL: matched on hash equality alone, which
-# would also trivially match rows _INSERT_MISSING_SQL just created (a freshly
-# inserted row's hash always equals its own staging row's hash) if it ran
-# first — confirmed live, that ordering double-counted every insert as
-# "unchanged" too. Running this against only pre-existing rows first, then
-# inserting what's left, keeps the three counts disjoint.
+# Must run before both _UPDATE_CHANGED_SQL and _INSERT_MISSING_SQL. Before
+# _INSERT_MISSING_SQL: matched on hash equality alone, which would also
+# trivially match rows _INSERT_MISSING_SQL just created (a freshly inserted
+# row's hash always equals its own staging row's hash) if it ran first —
+# confirmed live, that ordering double-counted every insert as "unchanged"
+# too. Before _UPDATE_CHANGED_SQL for the same reason: that statement also
+# overwrites source_row_hash to match the staging row, which would make a
+# just-updated row trivially match this hash-equality condition too if it ran
+# first — confirmed live 2026-09-02, that ordering double-counted every
+# update as "unchanged" as well. Running this against only pre-existing,
+# not-yet-touched rows first keeps all three counts disjoint.
 _TOUCH_UNCHANGED_SQL = f"""
 UPDATE registrant_docs rd SET last_seen_snapshot_date = %(snapshot_date)s
 FROM stg_registrant_docs s
@@ -202,12 +207,12 @@ def load_registrant_docs(
             for params in staged_rows:
                 copy.write_row(tuple(params[col] for col in _STAGING_COLUMNS))
 
-        # Order matters: both must run against only pre-existing rows, before
-        # _INSERT_MISSING_SQL creates new ones with trivially-self-matching hashes.
-        cur.execute(_UPDATE_CHANGED_SQL, {"snapshot_date": snapshot_date})
-        updated = cur.rowcount
+        # See the ordering comment on _TOUCH_UNCHANGED_SQL above — it must run
+        # first, before either of the other two statements.
         cur.execute(_TOUCH_UNCHANGED_SQL, {"snapshot_date": snapshot_date})
         unchanged = cur.rowcount
+        cur.execute(_UPDATE_CHANGED_SQL, {"snapshot_date": snapshot_date})
+        updated = cur.rowcount
         cur.execute(_INSERT_MISSING_SQL, {"snapshot_date": snapshot_date})
         inserted = cur.rowcount
 

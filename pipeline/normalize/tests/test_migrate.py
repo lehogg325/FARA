@@ -30,6 +30,7 @@ def test_migrate_applies_all_migrations_in_order(migrated_conn):
             "0003_staging_tables.sql",
             "0004_search_indexes.sql",
             "0005_contacts_and_topics.sql",
+            "0006_bulk_staging_for_remaining_loaders.sql",
         ]
 
 

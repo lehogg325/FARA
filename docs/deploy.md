@@ -22,18 +22,20 @@ Done, verified against the real accounts:
   direct-connection string. The real transaction pooler lives on the same
   `aws-0-<region>.pooler.supabase.com` host as the already-working session pooler, just
   port `6543` instead of `5432` — constructed and connection-tested that instead.
-- **Object storage is no longer Cloudflare-specific.** `fara_ingest.r2_archive.R2Archive`
+- **Object storage is Supabase Storage, not Cloudflare.** `fara_ingest.r2_archive.R2Archive`
   was already a generic S3-compatible client (boto3 + a custom `endpoint_url`) with
   nothing R2-specific in it — renamed to `fara_ingest.object_store_archive.ObjectStoreArchive`
-  and `FARA_R2_*` env vars to `FARA_STORAGE_*` so the code honestly reflects that it
-  works against any S3-compatible bucket. **Supabase Storage** (same project, same
-  account, no new vendor) is the plan — it ships an S3-compatible API, so this should be
-  a credentials-only change, but that hasn't been connection-tested yet the way the R2
-  path was (docs/phase2.md-style empirical verification) — Storage access keys are a
-  dashboard-only action, see below.
+  and `FARA_R2_*` env vars to `FARA_STORAGE_*`. Bucket `FARA` on the same Supabase
+  project, S3 endpoint `https://jpntfyaqoawdrlrqtavd.supabase.co/storage/v1/s3` —
+  connection-tested for real: `list_buckets()` and a full write/read/delete round trip
+  through the actual `ObjectStoreArchive` class both succeeded. All four
+  `FARA_STORAGE_*` GitHub Actions secrets are set.
+- **`ingest-bulk` triggered for real** via `workflow_dispatch` once all the secrets were
+  in place — see the Actions tab for the outcome; this is the first real run since two
+  earlier *scheduled* runs failed outright (no secrets existed yet at that point).
 
-Still blocked on manual steps only doable from your accounts: creating the Supabase
-Storage bucket + S3 access keys, and importing the single Vercel project.
+Still blocked on one manual step only doable from your account: importing the single
+Vercel project.
 
 ## Architecture
 
@@ -76,11 +78,10 @@ Storage bucket + S3 access keys, and importing the single Vercel project.
 
 None of this can be scripted from here — it needs your accounts and API tokens.
 
-### 1. Supabase — one step left
+### 1. Supabase — done
 
-The project, schema, and seed data are already live, and the session pooler is already
-a GitHub Actions secret. The only remaining piece: create the object storage (below)
-using Supabase's own Storage product, on this same project.
+The project, schema, and seed data are already live, and both the session pooler and
+Supabase Storage credentials are already GitHub Actions secrets.
 
 Optional hardening, skippable for now: Database → Roles → create a read-only role and
 `GRANT SELECT ON ALL TABLES IN SCHEMA public TO <role>;` (re-run after future migrations,
@@ -89,30 +90,16 @@ connection string for the Vercel `DATABASE_URL` instead of the default role. The
 read-only by construction (no write endpoints exist), so this reduces blast radius but
 isn't a hard blocker.
 
-### 2. Supabase Storage — not started, needed to unblock the scheduled workflows
+### 2. Supabase Storage — done
 
-1. In the Supabase dashboard → Storage, create a bucket (e.g. `fara-archive`). Private
-   (not public) is right — nothing here needs to be browser-fetchable directly.
-2. Storage → Settings (or Project Settings → API, depending on dashboard version) →
-   **S3 Access Keys** → generate a new key pair. This is a separate credential system
-   from your Postgres password. Note the **S3 endpoint URL** shown there too — it's
-   project-specific, something like `https://<project-ref>.supabase.co/storage/v1/s3`.
-3. Hand me the four values (bucket name, endpoint URL, access key ID, secret access key)
-   and I'll set them as GitHub Actions secrets directly (`gh secret set`) — no need to
-   paste them anywhere yourself. I have not yet connection-tested this path the way the
-   Postgres pooler strings were tested — first real ingest run against it is the real
-   verification, worth watching the Actions log for.
+Bucket `FARA`, S3-compatible endpoint on the same project. Connection-tested (Status
+above). All four `FARA_STORAGE_*` secrets are set on the repo.
 
-Without this, `ingest-bulk`/`docs-and-extract` will still run but fall back to writing
-into the runner's throwaway filesystem — no downloaded PDFs or resumability manifest
-survive between runs.
+### 3. GitHub repository secrets — done
 
-### 3. GitHub repository secrets — partially done
-
-Repo: [github.com/lehogg325/FARA](https://github.com/lehogg325/FARA). Already set:
-`DATABASE_URL` (session pooler), `ANTHROPIC_API_KEY`. Still needed: `FARA_STORAGE_BUCKET`,
-`FARA_STORAGE_ENDPOINT_URL`, `FARA_STORAGE_ACCESS_KEY_ID`, `FARA_STORAGE_SECRET_ACCESS_KEY`
-(send me the values from step 2 and I'll set them).
+Repo: [github.com/lehogg325/FARA](https://github.com/lehogg325/FARA). All six secrets
+set: `DATABASE_URL`, `ANTHROPIC_API_KEY`, `FARA_STORAGE_BUCKET`,
+`FARA_STORAGE_ENDPOINT_URL`, `FARA_STORAGE_ACCESS_KEY_ID`, `FARA_STORAGE_SECRET_ACCESS_KEY`.
 
 ### 4. Vercel — one project, not imported yet
 

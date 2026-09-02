@@ -8,34 +8,55 @@ from fara_normalize.csv_readers import clean_str, is_malformed_row, normalize_zi
 
 JURISDICTION = "fara"
 
-_INSERT_SQL = """
+_STAGING_COLUMNS = (
+    "jurisdiction",
+    "registration_number",
+    "name",
+    "business_name",
+    "address_1",
+    "address_2",
+    "city",
+    "state",
+    "zip",
+    "registration_date",
+    "termination_date",
+    "status",
+    "source_row_hash",
+)
+
+_NATURAL_KEY_JOIN = "r.jurisdiction = s.jurisdiction AND r.registration_number = s.registration_number"
+
+_INSERT_MISSING_SQL = f"""
 INSERT INTO registrants (
     jurisdiction, registration_number, name, business_name,
     address_1, address_2, city, state, zip,
     registration_date, termination_date, status,
     source_row_hash, first_seen_snapshot_date, last_seen_snapshot_date
-) VALUES (
-    %(jurisdiction)s, %(registration_number)s, %(name)s, %(business_name)s,
-    %(address_1)s, %(address_2)s, %(city)s, %(state)s, %(zip)s,
-    %(registration_date)s, %(termination_date)s, %(status)s,
-    %(source_row_hash)s, %(snapshot_date)s, %(snapshot_date)s
 )
+SELECT s.jurisdiction, s.registration_number, s.name, s.business_name,
+       s.address_1, s.address_2, s.city, s.state, s.zip,
+       s.registration_date, s.termination_date, s.status,
+       s.source_row_hash, %(snapshot_date)s, %(snapshot_date)s
+FROM stg_registrants s
+WHERE NOT EXISTS (SELECT 1 FROM registrants r WHERE {_NATURAL_KEY_JOIN})
 """
 
-_UPDATE_CHANGED_SQL = """
-UPDATE registrants SET
-    name = %(name)s, business_name = %(business_name)s,
-    address_1 = %(address_1)s, address_2 = %(address_2)s,
-    city = %(city)s, state = %(state)s, zip = %(zip)s,
-    registration_date = %(registration_date)s, termination_date = %(termination_date)s,
-    status = %(status)s, source_row_hash = %(source_row_hash)s,
-    last_seen_snapshot_date = %(snapshot_date)s, updated_at = now()
-WHERE jurisdiction = %(jurisdiction)s AND registration_number = %(registration_number)s
+_UPDATE_CHANGED_SQL = f"""
+UPDATE registrants r SET
+    name = s.name, business_name = s.business_name,
+    address_1 = s.address_1, address_2 = s.address_2, city = s.city, state = s.state, zip = s.zip,
+    registration_date = s.registration_date, termination_date = s.termination_date, status = s.status,
+    source_row_hash = s.source_row_hash, last_seen_snapshot_date = %(snapshot_date)s, updated_at = now()
+FROM stg_registrants s
+WHERE {_NATURAL_KEY_JOIN} AND r.source_row_hash IS DISTINCT FROM s.source_row_hash
 """
 
-_TOUCH_LAST_SEEN_SQL = """
-UPDATE registrants SET last_seen_snapshot_date = %(snapshot_date)s
-WHERE jurisdiction = %(jurisdiction)s AND registration_number = %(registration_number)s
+# Must run before _UPDATE_CHANGED_SQL and _INSERT_MISSING_SQL — see the
+# ordering comment where these statements are executed, below.
+_TOUCH_UNCHANGED_SQL = f"""
+UPDATE registrants r SET last_seen_snapshot_date = %(snapshot_date)s
+FROM stg_registrants s
+WHERE {_NATURAL_KEY_JOIN} AND r.source_row_hash = s.source_row_hash
 """
 
 _MISSING_FROM_SNAPSHOT_SQL = """
@@ -55,7 +76,7 @@ class LoadResult:
     skipped_unparseable: int = 0
 
 
-def _parse_row(raw_row: dict[str, str], snapshot_date: str) -> dict:
+def _parse_row(raw_row: dict[str, str]) -> dict:
     termination_date = parse_mmddyyyy(raw_row.get("Termination Date"))
     return {
         "jurisdiction": JURISDICTION,
@@ -71,7 +92,6 @@ def _parse_row(raw_row: dict[str, str], snapshot_date: str) -> dict:
         "termination_date": termination_date,
         "status": "terminated" if termination_date else "active",
         "source_row_hash": row_hash(raw_row),
-        "snapshot_date": snapshot_date,
     }
 
 
@@ -92,6 +112,12 @@ def load_registrants(
     rows' values on every run instead of settling — so intra-file duplicates are
     collapsed up front, last occurrence in the file wins, consistent with the
     last-write-wins convention used everywhere else in this loader.
+
+    Bulk-loaded via a staging table + 3 set-based statements, not a per-row
+    SELECT-then-INSERT/UPDATE loop — confirmed live against Supabase's session
+    pooler (2026-09-02, docs/deploy.md): the per-row version took 3m42s for
+    7,079 rows, ~30 rows/sec, round-trip latency dominated over query cost
+    exactly like registrant_docs did before it got the same fix (0003).
     """
     deduped: dict[int, dict[str, str]] = {}
     duplicate_count = 0
@@ -106,28 +132,30 @@ def load_registrants(
             duplicate_count += 1
         deduped[regnum] = raw_row
 
-    inserted = updated = unchanged = 0
+    staged_rows = [_parse_row(raw_row) for raw_row in deduped.values()]
 
     with conn.cursor() as cur:
-        for raw_row in deduped.values():
-            params = _parse_row(raw_row, snapshot_date)
-            cur.execute(
-                "SELECT source_row_hash FROM registrants "
-                "WHERE jurisdiction = %(jurisdiction)s AND registration_number = %(registration_number)s",
-                params,
-            )
-            existing = cur.fetchone()
+        cur.execute("TRUNCATE stg_registrants")
+        with cur.copy(f"COPY stg_registrants ({', '.join(_STAGING_COLUMNS)}) FROM STDIN") as copy:
+            for params in staged_rows:
+                copy.write_row(tuple(params[col] for col in _STAGING_COLUMNS))
 
-            if existing is None:
-                cur.execute(_INSERT_SQL, params)
-                inserted += 1
-            elif existing[0] != params["source_row_hash"]:
-                cur.execute(_UPDATE_CHANGED_SQL, params)
-                updated += 1
-            else:
-                cur.execute(_TOUCH_LAST_SEEN_SQL, params)
-                unchanged += 1
+        # Order matters, for two reasons: (1) _TOUCH_UNCHANGED_SQL must run
+        # before _UPDATE_CHANGED_SQL — that statement also overwrites
+        # source_row_hash to match the staging row, which would make a
+        # just-updated row trivially match _TOUCH_UNCHANGED_SQL's
+        # hash-equality condition too if it ran second, double-counting every
+        # update as "unchanged" as well (confirmed live, 2026-09-02). (2) both
+        # must run before _INSERT_MISSING_SQL creates new rows with
+        # trivially-self-matching hashes.
+        cur.execute(_TOUCH_UNCHANGED_SQL, {"snapshot_date": snapshot_date})
+        unchanged = cur.rowcount
+        cur.execute(_UPDATE_CHANGED_SQL, {"snapshot_date": snapshot_date})
+        updated = cur.rowcount
+        cur.execute(_INSERT_MISSING_SQL, {"snapshot_date": snapshot_date})
+        inserted = cur.rowcount
 
+        cur.execute("TRUNCATE stg_registrants")
         cur.execute(_MISSING_FROM_SNAPSHOT_SQL, {"jurisdiction": JURISDICTION, "snapshot_date": snapshot_date})
         missing = cur.fetchone()[0]
 

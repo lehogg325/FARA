@@ -10,43 +10,57 @@ from fara_normalize.registrant_lookup import load_registrant_id_map
 
 JURISDICTION = "fara"
 
-_SELECT_EXISTING_SQL = """
-SELECT source_row_hash FROM foreign_principals
-WHERE jurisdiction = %(jurisdiction)s AND registration_number = %(registration_number)s
-  AND foreign_principal_name = %(foreign_principal_name)s
-  AND country_raw IS NOT DISTINCT FROM %(country_raw)s
-  AND registration_date IS NOT DISTINCT FROM %(registration_date)s
+_STAGING_COLUMNS = (
+    "jurisdiction",
+    "registrant_id",
+    "registration_number",
+    "foreign_principal_name",
+    "country_raw",
+    "address_1",
+    "address_2",
+    "city",
+    "state",
+    "zip",
+    "registration_date",
+    "termination_date",
+    "source_row_hash",
+)
+
+_NATURAL_KEY_JOIN = """
+    fp.jurisdiction = s.jurisdiction AND fp.registration_number = s.registration_number
+    AND fp.foreign_principal_name = s.foreign_principal_name
+    AND fp.country_raw IS NOT DISTINCT FROM s.country_raw
+    AND fp.registration_date IS NOT DISTINCT FROM s.registration_date
 """
 
-_INSERT_SQL = """
+_INSERT_MISSING_SQL = f"""
 INSERT INTO foreign_principals (
     jurisdiction, registrant_id, registration_number, foreign_principal_name, country_raw,
     address_1, address_2, city, state, zip, registration_date, termination_date,
     source_row_hash, first_seen_snapshot_date, last_seen_snapshot_date
-) VALUES (
-    %(jurisdiction)s, %(registrant_id)s, %(registration_number)s, %(foreign_principal_name)s, %(country_raw)s,
-    %(address_1)s, %(address_2)s, %(city)s, %(state)s, %(zip)s, %(registration_date)s, %(termination_date)s,
-    %(source_row_hash)s, %(snapshot_date)s, %(snapshot_date)s
 )
+SELECT s.jurisdiction, s.registrant_id, s.registration_number, s.foreign_principal_name, s.country_raw,
+       s.address_1, s.address_2, s.city, s.state, s.zip, s.registration_date, s.termination_date,
+       s.source_row_hash, %(snapshot_date)s, %(snapshot_date)s
+FROM stg_foreign_principals s
+WHERE NOT EXISTS (SELECT 1 FROM foreign_principals fp WHERE {_NATURAL_KEY_JOIN})
 """
 
-_UPDATE_CHANGED_SQL = """
-UPDATE foreign_principals SET
-    address_1 = %(address_1)s, address_2 = %(address_2)s, city = %(city)s, state = %(state)s, zip = %(zip)s,
-    termination_date = %(termination_date)s, source_row_hash = %(source_row_hash)s,
+_UPDATE_CHANGED_SQL = f"""
+UPDATE foreign_principals fp SET
+    address_1 = s.address_1, address_2 = s.address_2, city = s.city, state = s.state, zip = s.zip,
+    termination_date = s.termination_date, source_row_hash = s.source_row_hash,
     last_seen_snapshot_date = %(snapshot_date)s, updated_at = now()
-WHERE jurisdiction = %(jurisdiction)s AND registration_number = %(registration_number)s
-  AND foreign_principal_name = %(foreign_principal_name)s
-  AND country_raw IS NOT DISTINCT FROM %(country_raw)s
-  AND registration_date IS NOT DISTINCT FROM %(registration_date)s
+FROM stg_foreign_principals s
+WHERE {_NATURAL_KEY_JOIN} AND fp.source_row_hash IS DISTINCT FROM s.source_row_hash
 """
 
-_TOUCH_LAST_SEEN_SQL = """
-UPDATE foreign_principals SET last_seen_snapshot_date = %(snapshot_date)s
-WHERE jurisdiction = %(jurisdiction)s AND registration_number = %(registration_number)s
-  AND foreign_principal_name = %(foreign_principal_name)s
-  AND country_raw IS NOT DISTINCT FROM %(country_raw)s
-  AND registration_date IS NOT DISTINCT FROM %(registration_date)s
+# Must run before _UPDATE_CHANGED_SQL and _INSERT_MISSING_SQL — see the
+# ordering comment where these statements are executed, below.
+_TOUCH_UNCHANGED_SQL = f"""
+UPDATE foreign_principals fp SET last_seen_snapshot_date = %(snapshot_date)s
+FROM stg_foreign_principals s
+WHERE {_NATURAL_KEY_JOIN} AND fp.source_row_hash = s.source_row_hash
 """
 
 _MISSING_FROM_SNAPSHOT_SQL = """
@@ -76,7 +90,7 @@ def _natural_key(raw_row: dict[str, str]) -> tuple:
     )
 
 
-def _parse_row(raw_row: dict[str, str], registrant_id: int, snapshot_date: str) -> dict:
+def _parse_row(raw_row: dict[str, str], registrant_id: int) -> dict:
     return {
         "jurisdiction": JURISDICTION,
         "registrant_id": registrant_id,
@@ -91,7 +105,6 @@ def _parse_row(raw_row: dict[str, str], registrant_id: int, snapshot_date: str) 
         "registration_date": parse_mmddyyyy(raw_row.get("Foreign Principal Registration Date")),
         "termination_date": parse_mmddyyyy(raw_row.get("Foreign Principal Termination Date")),
         "source_row_hash": row_hash(raw_row),
-        "snapshot_date": snapshot_date,
     }
 
 
@@ -105,6 +118,14 @@ def load_foreign_principals(
     Country is stored as free text and auto-registered into the countries
     reference table, never FK-enforced (confirmed real anomalies rule out a
     closed vocabulary here).
+
+    Bulk-loaded via a staging table + 3 set-based statements, not a per-row
+    SELECT-then-INSERT/UPDATE loop — confirmed live against Supabase's session
+    pooler (2026-09-02, docs/deploy.md): the per-row version took 8m23s for
+    17,745 rows, ~35 rows/sec, round-trip latency dominated over query cost
+    exactly like registrant_docs did before it got the same fix (0003).
+    Country registration stays a small per-distinct-value loop (a few hundred
+    round trips at most, not one per row — never the bottleneck).
     """
     registrant_id_map = load_registrant_id_map(conn, JURISDICTION)
     known_countries: set[str | None] = set()
@@ -126,35 +147,45 @@ def load_foreign_principals(
             duplicate_count += 1
         deduped[key] = raw_row
 
-    inserted = updated = unchanged = 0
     skipped_unmapped_registrant = 0
+    staged_rows: list[dict] = []
+
+    for raw_row in deduped.values():
+        registration_number = int(clean_str(raw_row["Registration Number"]))
+        registrant_id = registrant_id_map.get(registration_number)
+        if registrant_id is None:
+            skipped_unmapped_registrant += 1
+            continue
+
+        params = _parse_row(raw_row, registrant_id)
+        if params["country_raw"] not in known_countries:
+            register_observed_country(conn, JURISDICTION, params["country_raw"])
+            known_countries.add(params["country_raw"])
+
+        staged_rows.append(params)
 
     with conn.cursor() as cur:
-        for raw_row in deduped.values():
-            registration_number = int(clean_str(raw_row["Registration Number"]))
-            registrant_id = registrant_id_map.get(registration_number)
-            if registrant_id is None:
-                skipped_unmapped_registrant += 1
-                continue
+        cur.execute("TRUNCATE stg_foreign_principals")
+        with cur.copy(f"COPY stg_foreign_principals ({', '.join(_STAGING_COLUMNS)}) FROM STDIN") as copy:
+            for params in staged_rows:
+                copy.write_row(tuple(params[col] for col in _STAGING_COLUMNS))
 
-            params = _parse_row(raw_row, registrant_id, snapshot_date)
-            if params["country_raw"] not in known_countries:
-                register_observed_country(conn, JURISDICTION, params["country_raw"])
-                known_countries.add(params["country_raw"])
+        # Order matters, for two reasons: (1) _TOUCH_UNCHANGED_SQL must run
+        # before _UPDATE_CHANGED_SQL — that statement also overwrites
+        # source_row_hash to match the staging row, which would make a
+        # just-updated row trivially match _TOUCH_UNCHANGED_SQL's
+        # hash-equality condition too if it ran second, double-counting every
+        # update as "unchanged" as well (confirmed live, 2026-09-02). (2) both
+        # must run before _INSERT_MISSING_SQL creates new rows with
+        # trivially-self-matching hashes.
+        cur.execute(_TOUCH_UNCHANGED_SQL, {"snapshot_date": snapshot_date})
+        unchanged = cur.rowcount
+        cur.execute(_UPDATE_CHANGED_SQL, {"snapshot_date": snapshot_date})
+        updated = cur.rowcount
+        cur.execute(_INSERT_MISSING_SQL, {"snapshot_date": snapshot_date})
+        inserted = cur.rowcount
 
-            cur.execute(_SELECT_EXISTING_SQL, params)
-            existing = cur.fetchone()
-
-            if existing is None:
-                cur.execute(_INSERT_SQL, params)
-                inserted += 1
-            elif existing[0] != params["source_row_hash"]:
-                cur.execute(_UPDATE_CHANGED_SQL, params)
-                updated += 1
-            else:
-                cur.execute(_TOUCH_LAST_SEEN_SQL, params)
-                unchanged += 1
-
+        cur.execute("TRUNCATE stg_foreign_principals")
         cur.execute(_MISSING_FROM_SNAPSHOT_SQL, {"jurisdiction": JURISDICTION, "snapshot_date": snapshot_date})
         missing = cur.fetchone()[0]
 

@@ -9,37 +9,48 @@ from fara_normalize.registrant_lookup import load_registrant_id_map
 
 JURISDICTION = "fara"
 
-_SELECT_EXISTING_SQL = """
-SELECT source_row_hash FROM short_form_registrants
-WHERE jurisdiction = %(jurisdiction)s AND parent_registration_number = %(parent_registration_number)s
-  AND last_name IS NOT DISTINCT FROM %(last_name)s AND first_name IS NOT DISTINCT FROM %(first_name)s
-  AND short_form_date IS NOT DISTINCT FROM %(short_form_date)s
+_STAGING_COLUMNS = (
+    "jurisdiction",
+    "parent_registrant_id",
+    "parent_registration_number",
+    "last_name",
+    "first_name",
+    "short_form_date",
+    "termination_date",
+    "source_row_hash",
+)
+
+_NATURAL_KEY_JOIN = """
+    sf.jurisdiction = s.jurisdiction AND sf.parent_registration_number = s.parent_registration_number
+    AND sf.last_name IS NOT DISTINCT FROM s.last_name AND sf.first_name IS NOT DISTINCT FROM s.first_name
+    AND sf.short_form_date IS NOT DISTINCT FROM s.short_form_date
 """
 
-_INSERT_SQL = """
+_INSERT_MISSING_SQL = f"""
 INSERT INTO short_form_registrants (
     jurisdiction, parent_registrant_id, parent_registration_number, last_name, first_name,
     short_form_date, termination_date, source_row_hash, first_seen_snapshot_date, last_seen_snapshot_date
-) VALUES (
-    %(jurisdiction)s, %(parent_registrant_id)s, %(parent_registration_number)s, %(last_name)s, %(first_name)s,
-    %(short_form_date)s, %(termination_date)s, %(source_row_hash)s, %(snapshot_date)s, %(snapshot_date)s
 )
+SELECT s.jurisdiction, s.parent_registrant_id, s.parent_registration_number, s.last_name, s.first_name,
+       s.short_form_date, s.termination_date, s.source_row_hash, %(snapshot_date)s, %(snapshot_date)s
+FROM stg_short_form_registrants s
+WHERE NOT EXISTS (SELECT 1 FROM short_form_registrants sf WHERE {_NATURAL_KEY_JOIN})
 """
 
-_UPDATE_CHANGED_SQL = """
-UPDATE short_form_registrants SET
-    termination_date = %(termination_date)s, source_row_hash = %(source_row_hash)s,
+_UPDATE_CHANGED_SQL = f"""
+UPDATE short_form_registrants sf SET
+    termination_date = s.termination_date, source_row_hash = s.source_row_hash,
     last_seen_snapshot_date = %(snapshot_date)s, updated_at = now()
-WHERE jurisdiction = %(jurisdiction)s AND parent_registration_number = %(parent_registration_number)s
-  AND last_name IS NOT DISTINCT FROM %(last_name)s AND first_name IS NOT DISTINCT FROM %(first_name)s
-  AND short_form_date IS NOT DISTINCT FROM %(short_form_date)s
+FROM stg_short_form_registrants s
+WHERE {_NATURAL_KEY_JOIN} AND sf.source_row_hash IS DISTINCT FROM s.source_row_hash
 """
 
-_TOUCH_LAST_SEEN_SQL = """
-UPDATE short_form_registrants SET last_seen_snapshot_date = %(snapshot_date)s
-WHERE jurisdiction = %(jurisdiction)s AND parent_registration_number = %(parent_registration_number)s
-  AND last_name IS NOT DISTINCT FROM %(last_name)s AND first_name IS NOT DISTINCT FROM %(first_name)s
-  AND short_form_date IS NOT DISTINCT FROM %(short_form_date)s
+# Must run before _UPDATE_CHANGED_SQL and _INSERT_MISSING_SQL — see the
+# ordering comment where these statements are executed, below.
+_TOUCH_UNCHANGED_SQL = f"""
+UPDATE short_form_registrants sf SET last_seen_snapshot_date = %(snapshot_date)s
+FROM stg_short_form_registrants s
+WHERE {_NATURAL_KEY_JOIN} AND sf.source_row_hash = s.source_row_hash
 """
 
 _MISSING_FROM_SNAPSHOT_SQL = """
@@ -69,7 +80,7 @@ def _natural_key(raw_row: dict[str, str]) -> tuple:
     )
 
 
-def _parse_row(raw_row: dict[str, str], parent_registrant_id: int, snapshot_date: str) -> dict:
+def _parse_row(raw_row: dict[str, str], parent_registrant_id: int) -> dict:
     return {
         "jurisdiction": JURISDICTION,
         "parent_registrant_id": parent_registrant_id,
@@ -79,7 +90,6 @@ def _parse_row(raw_row: dict[str, str], parent_registrant_id: int, snapshot_date
         "short_form_date": parse_mmddyyyy(raw_row.get("Short Form Date")),
         "termination_date": parse_mmddyyyy(raw_row.get("Short Form Termination Date")),
         "source_row_hash": row_hash(raw_row),
-        "snapshot_date": snapshot_date,
     }
 
 
@@ -90,6 +100,13 @@ def load_short_form_registrants(
     repeat with only Termination Date differing — same class of bug as
     registrant 5769 in the registrants file (docs/api-notes.md) — last row in
     the file wins, consistent with load_registrants.
+
+    Bulk-loaded via a staging table + 3 set-based statements, not a per-row
+    SELECT-then-INSERT/UPDATE loop — confirmed live against Supabase's session
+    pooler (2026-09-02, docs/deploy.md): the per-row version didn't finish
+    44,613 rows within the ingest-bulk workflow's total time budget at the
+    ~30 rows/sec round-trip-latency-bound rate observed on the other datasets,
+    the exact problem registrant_docs already hit and fixed (0003).
     """
     registrant_id_map = load_registrant_id_map(conn, JURISDICTION)
 
@@ -105,31 +122,40 @@ def load_short_form_registrants(
             duplicate_count += 1
         deduped[key] = raw_row
 
-    inserted = updated = unchanged = 0
     skipped_unmapped_registrant = 0
+    staged_rows: list[dict] = []
+
+    for raw_row in deduped.values():
+        registration_number = int(clean_str(raw_row["Registration Number"]))
+        parent_registrant_id = registrant_id_map.get(registration_number)
+        if parent_registrant_id is None:
+            skipped_unmapped_registrant += 1
+            continue
+
+        staged_rows.append(_parse_row(raw_row, parent_registrant_id))
 
     with conn.cursor() as cur:
-        for raw_row in deduped.values():
-            registration_number = int(clean_str(raw_row["Registration Number"]))
-            parent_registrant_id = registrant_id_map.get(registration_number)
-            if parent_registrant_id is None:
-                skipped_unmapped_registrant += 1
-                continue
+        cur.execute("TRUNCATE stg_short_form_registrants")
+        with cur.copy(f"COPY stg_short_form_registrants ({', '.join(_STAGING_COLUMNS)}) FROM STDIN") as copy:
+            for params in staged_rows:
+                copy.write_row(tuple(params[col] for col in _STAGING_COLUMNS))
 
-            params = _parse_row(raw_row, parent_registrant_id, snapshot_date)
-            cur.execute(_SELECT_EXISTING_SQL, params)
-            existing = cur.fetchone()
+        # Order matters, for two reasons: (1) _TOUCH_UNCHANGED_SQL must run
+        # before _UPDATE_CHANGED_SQL — that statement also overwrites
+        # source_row_hash to match the staging row, which would make a
+        # just-updated row trivially match _TOUCH_UNCHANGED_SQL's
+        # hash-equality condition too if it ran second, double-counting every
+        # update as "unchanged" as well (confirmed live, 2026-09-02). (2) both
+        # must run before _INSERT_MISSING_SQL creates new rows with
+        # trivially-self-matching hashes.
+        cur.execute(_TOUCH_UNCHANGED_SQL, {"snapshot_date": snapshot_date})
+        unchanged = cur.rowcount
+        cur.execute(_UPDATE_CHANGED_SQL, {"snapshot_date": snapshot_date})
+        updated = cur.rowcount
+        cur.execute(_INSERT_MISSING_SQL, {"snapshot_date": snapshot_date})
+        inserted = cur.rowcount
 
-            if existing is None:
-                cur.execute(_INSERT_SQL, params)
-                inserted += 1
-            elif existing[0] != params["source_row_hash"]:
-                cur.execute(_UPDATE_CHANGED_SQL, params)
-                updated += 1
-            else:
-                cur.execute(_TOUCH_LAST_SEEN_SQL, params)
-                unchanged += 1
-
+        cur.execute("TRUNCATE stg_short_form_registrants")
         cur.execute(_MISSING_FROM_SNAPSHOT_SQL, {"jurisdiction": JURISDICTION, "snapshot_date": snapshot_date})
         missing = cur.fetchone()[0]
 

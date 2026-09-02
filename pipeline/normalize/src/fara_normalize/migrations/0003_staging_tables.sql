@@ -2,8 +2,12 @@
 -- over registrant_docs (~150K rows) didn't finish in 8+ minutes — ~300K
 -- synchronous round trips is too slow even though every query used its index.
 -- registrant_docs uses a bulk COPY-into-staging + set-based INSERT/UPDATE
--- instead (registrants/foreign_principals/short_forms stay row-by-row: at
--- 7K-45K rows they complete in well under a second, no staging table needed).
+-- instead. Correction (0006, 2026-09-02): the original assumption below that
+-- registrants/foreign_principals/short_forms could stay row-by-row held only
+-- against local Postgres's near-zero round-trip latency — against a real
+-- remote pooled connection (Supabase) the same round-trip-count bottleneck
+-- hit those three too, just at a smaller row count. All four loaders now use
+-- this same staging-table pattern; see 0006 for their staging tables.
 CREATE UNLOGGED TABLE stg_registrant_docs (
     jurisdiction                    text,
     registrant_id                    bigint,
