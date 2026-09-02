@@ -2,6 +2,28 @@
 
 ## Status (as of 2026-09-02)
 
+**Vercel project imported and live** at `fara-ochre.vercel.app`. First real deploy
+surfaced a build-time bug the earlier "verified locally" entries below didn't catch:
+Vercel's Python builder prefers a root `pyproject.toml`/`uv.lock` (uv workspace) over
+`requirements.txt` whenever both are present, running `uv sync` against the root project
+instead of installing from `requirements.txt`. The root workspace project declared
+`dependencies = []` (it's just an umbrella for the `ingest`/`pipeline`/`backend`
+members), so the deployed `api/index.py` function's venv had no `fastapi` at all — every
+`/api/*` route 500'd with `ModuleNotFoundError: No module named 'fastapi'`, not just
+search. Fixed by mirroring `requirements.txt`'s runtime deps onto the root project so
+`uv sync` actually installs them, then `uv lock` to regenerate. Re-verified against the
+live deployment post-fix: `/api/meta`, `/api/search?q=Ballard` (`group_count: 2`), and
+`/api/registrants/540` all return 200 with real data on `fara-ochre.vercel.app`.
+Lesson: local `api/index.py` startup and even `vercel build` running end-to-end aren't
+sufficient checks — always curl the actual deployed URL's `/api/*` routes after a Vercel
+deploy, since the Python dependency-install path only diverges from local dev at
+Vercel's build step.
+
+Note also: the project's auto-generated `*-lehogg325s-projects.vercel.app` deployment
+URLs sit behind Vercel's SSO/deployment-protection wall (redirect to
+`vercel.com/sso-api`) — that's expected and unrelated to this bug. The public,
+unprotected URL is the `fara-ochre.vercel.app` alias.
+
 Done, verified against the real accounts:
 
 - **Supabase project created, schema fully migrated, real data loaded.** The full bulk
