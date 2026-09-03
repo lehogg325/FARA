@@ -204,7 +204,7 @@ select {
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--orange);
-  background: rgba(255, 79, 0, 0.12);
+  background: rgba(226, 130, 90, 0.12);
   border: 1px solid var(--orange);
   border-radius: 3px;
   padding: 9px 16px;
@@ -325,7 +325,7 @@ select {
   margin-left: 8px;
 }
 .status-pill.active { background: rgba(84, 162, 114, 0.18); color: #54a272; border: 1px solid rgba(84, 162, 114, 0.4); }
-.status-pill.terminated { background: rgba(140, 140, 140, 0.18); color: var(--gray); border: 1px solid var(--rule); }
+.status-pill.terminated { background: rgba(163, 160, 150, 0.18); color: var(--gray); border: 1px solid var(--rule); }
 
 .record-fields {
   display: grid;
@@ -592,8 +592,8 @@ select {
   font-size: 10px;
   letter-spacing: 0.06em;
   color: var(--yellow);
-  background: rgba(255, 163, 0, 0.1);
-  border: 1px solid rgba(255, 163, 0, 0.35);
+  background: rgba(217, 160, 84, 0.1);
+  border: 1px solid rgba(217, 160, 84, 0.35);
   border-radius: 10px;
   padding: 3px 10px;
   margin-bottom: 10px;
