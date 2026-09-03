@@ -165,6 +165,7 @@ class Country(BaseModel):
     country_name: str
     registrant_count: int
     foreign_principal_count: int
+    note: str | None = None
 
 
 class CountryDetail(BaseModel):

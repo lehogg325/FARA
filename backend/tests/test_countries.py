@@ -5,7 +5,28 @@ def test_list_countries_includes_counts(client, seeded):
     resp = client.get("/api/countries")
     assert resp.status_code == 200
     body = resp.json()
-    assert body == [{"country_name": "ICELAND", "registrant_count": 1, "foreign_principal_count": 1}]
+    assert body == [{"country_name": "ICELAND", "registrant_count": 1, "foreign_principal_count": 1, "note": None}]
+
+
+def test_list_countries_hides_zero_filing_entries(client, seeded, conn):
+    # A seed-list entry with no real filings behind it (e.g. a defensive spelling
+    # variant DOJ's own data never actually used) shouldn't clutter the dropdown.
+    conn.execute("INSERT INTO countries (jurisdiction, country_name) VALUES ('fara', 'NARNIA')")
+    conn.commit()
+    resp = client.get("/api/countries")
+    assert resp.status_code == 200
+    names = [c["country_name"] for c in resp.json()]
+    assert "ICELAND" in names
+    assert "NARNIA" not in names
+
+
+def test_list_countries_surfaces_note(client, seeded, conn):
+    conn.execute("UPDATE countries SET note = 'a test note' WHERE jurisdiction = 'fara' AND country_name = 'ICELAND'")
+    conn.commit()
+    resp = client.get("/api/countries")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body[0]["note"] == "a test note"
 
 
 def test_get_country_detail(client, seeded):

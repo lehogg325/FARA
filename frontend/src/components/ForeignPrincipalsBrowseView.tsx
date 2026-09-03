@@ -72,7 +72,9 @@ export function ForeignPrincipalsBrowseView() {
         <select value={country} onChange={(e) => resetPage(setCountry)(e.target.value)}>
           <option value="">All countries</option>
           {(countries.data ?? []).map((c) => (
-            <option key={c.country_name} value={c.country_name}>{c.country_name}</option>
+            <option key={c.country_name} value={c.country_name}>
+              {c.note ? `${c.country_name} — ${c.note}` : c.country_name}
+            </option>
           ))}
         </select>
         <select value={status} onChange={(e) => resetPage(setStatus)(e.target.value as typeof status)}>

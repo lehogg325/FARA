@@ -176,6 +176,7 @@ export interface Country {
   country_name: string;
   registrant_count: number;
   foreign_principal_count: number;
+  note: string | null;
 }
 
 export interface CountryDetail {

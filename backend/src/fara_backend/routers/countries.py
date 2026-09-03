@@ -22,13 +22,17 @@ router = APIRouter(prefix="/countries", tags=["countries"])
 def list_countries(jurisdiction: str = Query("fara"), conn: psycopg.Connection = Depends(get_db)) -> list[Country]:
     rows = conn.execute(
         """
-        SELECT c.country_name,
+        SELECT c.country_name, c.note,
                count(DISTINCT fp.registrant_id) AS registrant_count,
                count(DISTINCT fp.foreign_principal_id) AS foreign_principal_count
         FROM countries c
         LEFT JOIN foreign_principals fp ON fp.jurisdiction = c.jurisdiction AND fp.country_raw = c.country_name
         WHERE c.jurisdiction = %s
-        GROUP BY c.country_name
+        GROUP BY c.country_name, c.note
+        -- Seed data includes defensive spelling variants that were never actually
+        -- observed in real filings — hide those dead entries instead of listing
+        -- every possible DOJ spelling (migration 0008_country_notes.sql).
+        HAVING count(DISTINCT fp.registrant_id) > 0
         ORDER BY registrant_count DESC, c.country_name
         """,
         (jurisdiction,),

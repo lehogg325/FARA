@@ -1,20 +1,24 @@
 /* The Ansible visual system — retrofuturist, dark-mode default. Same tokens as
    the LDA visualizer's frontend, applied here to a document-browser layout
    instead of a graph canvas.
-   Palette: Signal Orange #FF4F00 · Deep Space #0D0D14 · Lunar White #F5F2EC ·
-   Chrome Yellow #FFA300 · Celestial Blue #4997D0 · Blueprint Indigo #263D6B ·
-   Photographic Gray #8C8C8C · Newsprint #EDE8DC · Teletype Ink #1A1A1A.
+   Palette: Coral Rust #E2825A · Deep Space #0D0D14 · Lunar White #F5F2EC ·
+   Soft Amber #D9A054 · Celestial Blue #4997D0 · Blueprint Indigo #263D6B ·
+   Warm Taupe #A3A096 · Newsprint #EDE8DC · Teletype Ink #1A1A1A.
+   Accent/value/muted-text tones were softened from earlier, more saturated
+   versions (pure vermilion, alert-yellow, flat gray) — all three passed WCAG AA
+   contrast even before, but read as harsh/high-vibration against --space; these
+   improve contrast further while being gentler to look at.
    Type: Playfair Display (masthead) · Lora (prose) · IBM Plex Mono (labels/UI). */
 
 :root {
-  --orange: #ff4f00;
+  --orange: #e2825a;
   --space: #0d0d14;
   --lunar: #f5f2ec;
   --ink: #1a1a1a;
-  --yellow: #ffa300;
+  --yellow: #d9a054;
   --blue: #4997d0;
   --indigo: #263d6b;
-  --gray: #8c8c8c;
+  --gray: #a3a096;
   --newsprint: #ede8dc;
   --panel: #13131c;
   --rule: rgba(140, 140, 140, 0.35);
