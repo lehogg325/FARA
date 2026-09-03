@@ -27,6 +27,11 @@ def get_pool() -> ConnectionPool:
             _dsn(),
             min_size=1,
             max_size=5,
+            # Verify a connection still works before handing it out — without this,
+            # a warm instance can hand out a connection that died while idle (e.g.
+            # after a DB restart), surfacing as a request-level error instead of
+            # being caught and replaced here.
+            check=ConnectionPool.check_connection,
             # prepare_threshold=None disables psycopg's server-side prepared
             # statements — required in production, where DATABASE_URL points
             # at Supabase's transaction-mode pooler (docs/deploy.md): that

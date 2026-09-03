@@ -145,6 +145,17 @@ Anthropic API credit.
   connection per statement — without this, the API would intermittently fail with
   "prepared statement does not exist" under load. The session pooler doesn't have this
   problem, so `fara-normalize`/`fara-extract` don't need it.
+- **Region**: `vercel.json` pins `regions: ["pdx1"]` (Portland, OR). The Supabase host
+  is `aws-0-us-west-2.pooler.supabase.com` — AWS Oregon, the same metro region. Confirmed
+  already co-located, no change needed (checked while triaging a sibling project's
+  performance-suggestions issue, which flagged this as worth confirming).
+- **Caching**: every route is read-only and data changes only via the scheduled
+  ingest/extract workflows below, so `backend/src/fara_backend/main.py`'s
+  `add_cache_headers` middleware sets `Cache-Control: public, s-maxage=3600,
+  stale-while-revalidate=86400` on successful GET responses, letting Vercel's edge
+  absorb repeat traffic (the search box, country pages) between requests.
+  `/api/meta` is exempt — it's the freshness/status-check endpoint, and caching it
+  would make the "did today's ingest run yet" check lie for up to the TTL window.
 - **Object storage**: any S3-compatible bucket (Supabase Storage — see Status above)
   holds the raw bulk CSVs (`fara/bulk/...`) and every downloaded filing PDF
   (`fara/docs/...`), plus the ingest manifest (`manifest/manifest.sqlite3`) so the
