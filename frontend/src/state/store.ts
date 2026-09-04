@@ -8,7 +8,7 @@ export type View =
   | { kind: "foreign-principal-group"; name: string; country: string | null }
   | { kind: "document"; id: number }
   | { kind: "document-search"; q: string }
-  | { kind: "country"; name: string }
+  | { kind: "country"; name: string; tab?: "overview" | "network" | "topics" }
   | { kind: "foreign-principals-browse" };
 
 interface Store {

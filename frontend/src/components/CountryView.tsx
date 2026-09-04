@@ -99,7 +99,7 @@ function NetworkTab({ name }: { name: string }) {
   );
 }
 
-export function CountryView({ name }: { name: string }) {
+export function CountryView({ name, tab }: { name: string; tab?: "overview" | "network" | "topics" }) {
   const back = useStore((s) => s.back);
 
   return (
@@ -110,6 +110,8 @@ export function CountryView({ name }: { name: string }) {
       <h2 className="record-title">{name}</h2>
 
       <Tabs
+        key={tab}
+        initial={tab}
         tabs={[
           { key: "overview", label: "Overview", content: <OverviewTab name={name} /> },
           { key: "network", label: "Network", content: <NetworkTab name={name} /> },
