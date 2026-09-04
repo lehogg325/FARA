@@ -273,6 +273,9 @@ export const api = {
 
   registrant: (id: number) => get<RegistrantDetail>(`/api/registrants/${id}`),
   registrantsByName: (name: string) => get<RegistrantByNameGroup>(`/api/registrants/by-name${qs({ name })}`),
+  listRegistrants: (params: {
+    q?: string; status?: "active" | "terminated"; state?: string; offset?: number; limit?: number;
+  }) => get<Page<RegistrantSummary>>(`/api/registrants${qs(params)}`),
   registrantForeignPrincipals: (id: number, offset = 0, limit = 25) =>
     get<Page<ForeignPrincipal>>(`/api/registrants/${id}/foreign-principals${qs({ offset, limit })}`),
   registrantShortForms: (id: number, offset = 0, limit = 25) =>
@@ -296,6 +299,10 @@ export const api = {
   documentFields: (id: number) => get<ExtractedField[]>(`/api/documents/${id}/fields`),
   documentSearch: (q: string, offset = 0, limit = 25) =>
     get<Page<DocumentSearchResult>>(`/api/documents/search${qs({ q, offset, limit })}`),
+  listDocuments: (params: {
+    document_type?: string; registrant_id?: number; country?: string;
+    date_from?: string; date_to?: string; offset?: number; limit?: number;
+  }) => get<Page<RegistrantDoc>>(`/api/documents${qs(params)}`),
 
   countries: () => get<Country[]>("/api/countries"),
   country: (name: string) => get<CountryDetail>(`/api/countries/${encodeURIComponent(name)}`),

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { CountryView } from "./components/CountryView";
 import { DocumentSearchView } from "./components/DocumentSearchView";
+import { DocumentsBrowseView } from "./components/DocumentsBrowseView";
 import { DocumentView } from "./components/DocumentView";
 import { EmptyState } from "./components/EmptyState";
 import { Footer } from "./components/Footer";
@@ -9,6 +10,7 @@ import { ForeignPrincipalsBrowseView } from "./components/ForeignPrincipalsBrows
 import { ForeignPrincipalView } from "./components/ForeignPrincipalView";
 import { GuidedTour } from "./components/GuidedTour";
 import { RegistrantGroupView } from "./components/RegistrantGroupView";
+import { RegistrantsBrowseView } from "./components/RegistrantsBrowseView";
 import { RegistrantView } from "./components/RegistrantView";
 import { SearchBox } from "./components/SearchBox";
 import { useStore } from "./state/store";
@@ -39,9 +41,21 @@ export default function App() {
           )}
           <button
             className="header-nav-btn"
+            onClick={() => navigate({ kind: "registrants-browse" })}
+          >
+            Browse registrants
+          </button>
+          <button
+            className="header-nav-btn"
             onClick={() => navigate({ kind: "foreign-principals-browse" })}
           >
             Browse foreign principals
+          </button>
+          <button
+            className="header-nav-btn"
+            onClick={() => navigate({ kind: "documents-browse" })}
+          >
+            Browse filings
           </button>
         </div>
       </header>
@@ -55,6 +69,8 @@ export default function App() {
           <ForeignPrincipalGroupView name={view.name} country={view.country} />
         )}
         {view.kind === "foreign-principals-browse" && <ForeignPrincipalsBrowseView />}
+        {view.kind === "registrants-browse" && <RegistrantsBrowseView />}
+        {view.kind === "documents-browse" && <DocumentsBrowseView />}
         {view.kind === "document" && <DocumentView id={view.id} />}
         {view.kind === "document-search" && <DocumentSearchView q={view.q} />}
         {view.kind === "country" && <CountryView name={view.name} tab={view.tab} />}

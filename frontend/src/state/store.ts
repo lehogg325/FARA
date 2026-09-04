@@ -9,7 +9,9 @@ export type View =
   | { kind: "document"; id: number }
   | { kind: "document-search"; q: string }
   | { kind: "country"; name: string; tab?: "overview" | "network" | "topics" }
-  | { kind: "foreign-principals-browse" };
+  | { kind: "foreign-principals-browse" }
+  | { kind: "registrants-browse" }
+  | { kind: "documents-browse" };
 
 interface Store {
   view: View;
