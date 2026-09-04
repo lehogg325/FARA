@@ -1,14 +1,27 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { api } from "../api/client";
+import { api, type Country } from "../api/client";
 import { useStore } from "../state/store";
+
+// Pinned first, in this order, ahead of the by-activity ranking below —
+// exact country_name strings as stored in the countries table.
+const PRIORITY_COUNTRIES = ["CHINA", "RUSSIA", "IRAN", "KOREA, NORTH"];
+
+function withPriorityFirst(countries: Country[]): Country[] {
+  const pinned = PRIORITY_COUNTRIES.map((name) => countries.find((c) => c.country_name === name)).filter(
+    (c): c is Country => c !== undefined,
+  );
+  const pinnedNames = new Set(pinned.map((c) => c.country_name));
+  const rest = countries.filter((c) => !pinnedNames.has(c.country_name));
+  return [...pinned, ...rest];
+}
 
 export function EmptyState() {
   const meta = useQuery({ queryKey: ["meta"], queryFn: api.meta, staleTime: Infinity });
   const countries = useQuery({ queryKey: ["countries"], queryFn: api.countries, staleTime: Infinity });
   const navigate = useStore((s) => s.navigate);
   const [textQuery, setTextQuery] = useState("");
-  const topCountries = (countries.data ?? []).filter((c) => c.registrant_count > 0).slice(0, 12);
+  const topCountries = withPriorityFirst((countries.data ?? []).filter((c) => c.registrant_count > 0)).slice(0, 12);
 
   return (
     <div className="empty-state">
