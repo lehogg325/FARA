@@ -2,7 +2,7 @@ import Graph from "graphology";
 import forceAtlas2 from "graphology-layout-forceatlas2";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Sigma } from "sigma";
-import { EdgeArrowProgram } from "sigma/rendering";
+import { EdgeArrowProgram, type NodeHoverDrawingFunction } from "sigma/rendering";
 import { api, type CountryGraph, type GraphEdge, type GraphNode, type GraphNodeType } from "../api/client";
 import { useStore } from "../state/store";
 
@@ -25,6 +25,59 @@ const LEGEND_ORDER: GraphNodeType[] = ["foreign_principal", "registrant", "conta
 const BACKBONE_SIZE: Record<"foreign_principal" | "registrant", number> = {
   foreign_principal: 6,
   registrant: 6,
+};
+
+// Sigma's default hover renderer draws a solid white label background (for
+// legibility against whatever's behind it) but reuses the theme's --lunar
+// (near-white) text color for the label itself — invisible on its own white
+// box. That was never visible before because only a couple of nodes used the
+// hover renderer at once; now every label goes through it (nodeReducer below
+// makes all labels hover/selected-only), so it's the only label path that
+// matters. Same box-drawing geometry as sigma/rendering's drawDiscNodeHover,
+// with the text color hardcoded dark instead of pulled from settings.
+const HOVER_LABEL_TEXT_COLOR = "#1a1a1a";
+
+const drawNodeHoverWithDarkLabel: NodeHoverDrawingFunction = (context, data, settings) => {
+  const size = settings.labelSize;
+  const font = settings.labelFont;
+  const weight = settings.labelWeight;
+  context.font = `${weight} ${size}px ${font}`;
+
+  context.fillStyle = "#FFF";
+  context.shadowOffsetX = 0;
+  context.shadowOffsetY = 0;
+  context.shadowBlur = 8;
+  context.shadowColor = "#000";
+  const PADDING = 2;
+  if (typeof data.label === "string") {
+    const textWidth = context.measureText(data.label).width;
+    const boxWidth = Math.round(textWidth + 5);
+    const boxHeight = Math.round(size + 2 * PADDING);
+    const radius = Math.max(data.size, size / 2) + PADDING;
+    const angleRadian = Math.asin(boxHeight / 2 / radius);
+    const xDeltaCoord = Math.sqrt(Math.abs(radius ** 2 - (boxHeight / 2) ** 2));
+    context.beginPath();
+    context.moveTo(data.x + xDeltaCoord, data.y + boxHeight / 2);
+    context.lineTo(data.x + radius + boxWidth, data.y + boxHeight / 2);
+    context.lineTo(data.x + radius + boxWidth, data.y - boxHeight / 2);
+    context.lineTo(data.x + xDeltaCoord, data.y - boxHeight / 2);
+    context.arc(data.x, data.y, radius, angleRadian, -angleRadian);
+    context.closePath();
+    context.fill();
+  } else {
+    context.beginPath();
+    context.arc(data.x, data.y, data.size + PADDING, 0, Math.PI * 2);
+    context.closePath();
+    context.fill();
+  }
+  context.shadowOffsetX = 0;
+  context.shadowOffsetY = 0;
+  context.shadowBlur = 0;
+
+  if (data.label) {
+    context.fillStyle = HOVER_LABEL_TEXT_COLOR;
+    context.fillText(data.label, data.x + data.size + 3, data.y + size / 3);
+  }
 };
 
 // Backbone nodes (registrant/foreign_principal) are structurally permanent —
@@ -292,6 +345,7 @@ export const GraphView = forwardRef<GraphViewHandle, { countryName: string; data
 
       const renderer = new Sigma(graph, containerRef.current, {
         labelColor: { color: "#f5f2ec" },
+        defaultDrawNodeHover: drawNodeHoverWithDarkLabel,
         defaultEdgeType: "arrow",
         edgeProgramClasses: { arrow: EdgeArrowProgram },
         enableEdgeEvents: true,
