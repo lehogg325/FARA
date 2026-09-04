@@ -27,9 +27,12 @@ const BACKBONE_SIZE: Record<"foreign_principal" | "registrant", number> = {
   registrant: 6,
 };
 
-// Backbone nodes (registrant/foreign_principal, always ≤150 — a genuinely legible
-// count) keep always-on labels; expanded contact/recipient nodes only label on
-// hover or when selected, since those are the noisy raw-text entities (docs/phase2.md).
+// Backbone nodes (registrant/foreign_principal) are structurally permanent —
+// never pruned by the collapse handler and never resized by
+// resizeExpansionNodes — regardless of label visibility, which is handled
+// separately (all node types are hover/selected-only labels; see nodeReducer
+// below — a busy country's backbone alone can be ~150 nodes, too many for
+// always-on labels to stay legible).
 function isBackbone(nodeType: GraphNodeType): boolean {
   return nodeType === "registrant" || nodeType === "foreign_principal";
 }
@@ -295,7 +298,7 @@ export const GraphView = forwardRef<GraphViewHandle, { countryName: string; data
         nodeReducer: (node, attrs) => {
           const nodeType = attrs.nodeType as GraphNodeType;
           if (hiddenTypesRef.current.has(nodeType)) return { ...attrs, hidden: true };
-          const showLabel = isBackbone(nodeType) || node === hoveredRef.current || node === selectedIdRef.current;
+          const showLabel = node === hoveredRef.current || node === selectedIdRef.current;
           return { ...attrs, label: showLabel ? attrs.label : undefined };
         },
         edgeReducer: (edge, attrs) => {
@@ -421,8 +424,8 @@ export const GraphView = forwardRef<GraphViewHandle, { countryName: string; data
     return (
       <div>
         <p className="graph-caption">
-          Click any registrant to reveal their reportable contacts and contribution recipients. Click a legend swatch to
-          hide/show that node type.
+          Hover a node to see its name. Click any registrant to reveal their reportable contacts and contribution
+          recipients. Click a legend swatch to hide/show that node type.
         </p>
 
         <div className="graph-toolbar">
