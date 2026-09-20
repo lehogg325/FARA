@@ -59,16 +59,14 @@ def test_fp_grouped_lookup_index_exists(migrated_conn):
     assert "ix_fp_grouped_lookup" in indexes
 
 
-
-# The public-facing subset of EXPECTED_TABLES -- load_runs/extraction_runs/
-# schema_migrations are internal pipeline bookkeeping (0009's own distinction)
-# and deliberately get no read policy for this role or anon/authenticated.
-PUBLIC_FACING_TABLES = {
-    "jurisdictions", "countries", "document_types", "registrants",
-    "short_form_registrants", "foreign_principals", "registrant_docs",
-    "document_text", "document_extracted_fields", "reportable_contacts",
-    "topics", "document_topics",
-}
+# Every table fara_app can read -- EXPECTED_TABLES minus schema_migrations
+# (the migration ledger itself; no router ever reads it). load_runs/
+# extraction_runs ARE included here even though 0009 keeps them off the
+# public PostgREST surface (anon/authenticated) as internal pipeline
+# bookkeeping -- meta.py's /api/meta aggregates over both for dataset
+# freshness/extraction-coverage reporting, so this app's own connection
+# needs them regardless of what the (unused) public REST API exposes.
+FARA_APP_READABLE_TABLES = EXPECTED_TABLES - {"schema_migrations"}
 
 
 def test_fara_app_role_has_select_only_access(migrated_conn):
@@ -82,4 +80,4 @@ def test_fara_app_role_has_select_only_access(migrated_conn):
             "SELECT tablename FROM pg_policies WHERE policyname = 'fara_app read access' ORDER BY tablename"
         )
         policy_tables = {r[0] for r in cur.fetchall()}
-    assert policy_tables == PUBLIC_FACING_TABLES
+    assert policy_tables == FARA_APP_READABLE_TABLES
