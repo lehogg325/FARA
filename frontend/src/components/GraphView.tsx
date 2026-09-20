@@ -1,6 +1,6 @@
 import Graph from "graphology";
 import forceAtlas2 from "graphology-layout-forceatlas2";
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type KeyboardEvent } from "react";
 import { Sigma } from "sigma";
 import { EdgeArrowProgram, type NodeHoverDrawingFunction } from "sigma/rendering";
 import { api, type CountryGraph, type GraphEdge, type GraphNode, type GraphNodeType } from "../api/client";
@@ -306,6 +306,7 @@ export const GraphView = forwardRef<GraphViewHandle, { countryName: string; data
     const [tooltip, setTooltip] = useState<{ edge: GraphEdge; x: number; y: number } | null>(null);
     const [findQuery, setFindQuery] = useState("");
     const [findOpen, setFindOpen] = useState(false);
+    const [findActiveIndex, setFindActiveIndex] = useState(-1);
 
     useImperativeHandle(ref, () => ({
       focusByLabel: (label: string) => {
@@ -436,7 +437,6 @@ export const GraphView = forwardRef<GraphViewHandle, { countryName: string; data
         sigmaRef.current = null;
         graphRef.current = null;
       };
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [data, countryName]);
 
     useEffect(() => {
@@ -473,6 +473,24 @@ export const GraphView = forwardRef<GraphViewHandle, { countryName: string; data
       renderer.refresh();
       setFindQuery("");
       setFindOpen(false);
+      setFindActiveIndex(-1);
+    };
+
+    const onFindKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+      if (findMatches.length === 0) return;
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setFindActiveIndex((i) => Math.min(i + 1, findMatches.length - 1));
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setFindActiveIndex((i) => Math.max(i - 1, 0));
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        const target = findMatches[findActiveIndex] ?? findMatches[0];
+        selectFindMatch(target.id);
+      } else if (e.key === "Escape") {
+        setFindOpen(false);
+      }
     };
 
     return (
@@ -488,17 +506,33 @@ export const GraphView = forwardRef<GraphViewHandle, { countryName: string; data
               type="text"
               placeholder="Find in this graph…"
               value={findQuery}
-              onChange={(e) => setFindQuery(e.target.value)}
+              onChange={(e) => { setFindQuery(e.target.value); setFindActiveIndex(-1); }}
               onFocus={() => setFindOpen(true)}
               onBlur={() => setTimeout(() => setFindOpen(false), 150)}
+              onKeyDown={onFindKeyDown}
+              role="combobox"
+              aria-expanded={findOpen && findQuery.trim().length >= 2}
+              aria-controls="graph-find-listbox"
+              aria-autocomplete="list"
+              aria-activedescendant={findActiveIndex >= 0 ? `graph-find-option-${findActiveIndex}` : undefined}
             />
             {findOpen && findQuery.trim().length >= 2 && (
-              <ul className="graph-find-results">
+              <ul className="graph-find-results" id="graph-find-listbox" role="listbox">
                 {findMatches.length === 0 ? (
                   <li className="search-no-results">No matches loaded</li>
                 ) : (
-                  findMatches.map((m) => (
-                    <li key={m.id} onMouseDown={() => selectFindMatch(m.id)}>{m.label}</li>
+                  findMatches.map((m, i) => (
+                    <li
+                      key={m.id}
+                      id={`graph-find-option-${i}`}
+                      role="option"
+                      aria-selected={i === findActiveIndex}
+                      className={i === findActiveIndex ? "active" : undefined}
+                      onMouseEnter={() => setFindActiveIndex(i)}
+                      onMouseDown={() => selectFindMatch(m.id)}
+                    >
+                      {m.label}
+                    </li>
                   ))
                 )}
               </ul>

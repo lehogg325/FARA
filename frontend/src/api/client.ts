@@ -285,62 +285,77 @@ const qs = (params: Record<string, string | number | undefined>): string => {
 };
 
 export const api = {
-  meta: () => get<Meta>("/api/meta"),
-  documentTypes: () => get<DocumentType[]>("/api/document-types"),
+  meta: (signal?: AbortSignal) => get<Meta>("/api/meta", signal),
+  documentTypes: (signal?: AbortSignal) => get<DocumentType[]>("/api/document-types", signal),
 
   search: (q: string, type?: EntityType, signal?: AbortSignal) =>
     get<SearchResult[]>(`/api/search${qs({ q, type, limit: 15 })}`, signal),
 
-  registrant: (id: number) => get<RegistrantDetail>(`/api/registrants/${id}`),
-  registrantsByName: (name: string) => get<RegistrantByNameGroup>(`/api/registrants/by-name${qs({ name })}`),
-  listRegistrants: (params: {
-    q?: string; status?: "active" | "terminated"; state?: string; offset?: number; limit?: number;
-  }) => get<Page<RegistrantSummary>>(`/api/registrants${qs(params)}`),
-  registrantForeignPrincipals: (id: number, offset = 0, limit = 25) =>
-    get<Page<ForeignPrincipal>>(`/api/registrants/${id}/foreign-principals${qs({ offset, limit })}`),
-  registrantShortForms: (id: number, offset = 0, limit = 25) =>
-    get<Page<ShortFormRegistrant>>(`/api/registrants/${id}/short-form-registrants${qs({ offset, limit })}`),
-  registrantDocuments: (id: number, offset = 0, limit = 25) =>
-    get<Page<RegistrantDoc>>(`/api/registrants/${id}/documents${qs({ offset, limit })}`),
+  registrant: (id: number, signal?: AbortSignal) => get<RegistrantDetail>(`/api/registrants/${id}`, signal),
+  registrantsByName: (name: string, signal?: AbortSignal) =>
+    get<RegistrantByNameGroup>(`/api/registrants/by-name${qs({ name })}`, signal),
+  listRegistrants: (
+    params: { q?: string; status?: "active" | "terminated"; state?: string; offset?: number; limit?: number },
+    signal?: AbortSignal,
+  ) => get<Page<RegistrantSummary>>(`/api/registrants${qs(params)}`, signal),
+  registrantForeignPrincipals: (id: number, offset = 0, limit = 25, signal?: AbortSignal) =>
+    get<Page<ForeignPrincipal>>(`/api/registrants/${id}/foreign-principals${qs({ offset, limit })}`, signal),
+  registrantShortForms: (id: number, offset = 0, limit = 25, signal?: AbortSignal) =>
+    get<Page<ShortFormRegistrant>>(`/api/registrants/${id}/short-form-registrants${qs({ offset, limit })}`, signal),
+  registrantDocuments: (id: number, offset = 0, limit = 25, signal?: AbortSignal) =>
+    get<Page<RegistrantDoc>>(`/api/registrants/${id}/documents${qs({ offset, limit })}`, signal),
 
-  foreignPrincipal: (id: number) => get<ForeignPrincipal>(`/api/foreign-principals/${id}`),
-  foreignPrincipalsByName: (name: string, country?: string) =>
-    get<ForeignPrincipalByNameGroup[]>(`/api/foreign-principals/by-name${qs({ name, country })}`),
-  searchForeignPrincipals: (params: {
-    q?: string; country?: string; status?: "active" | "terminated"; sort?: ForeignPrincipalSort;
-    group_by_name?: boolean; offset?: number; limit?: number;
-  }) =>
+  foreignPrincipal: (id: number, signal?: AbortSignal) => get<ForeignPrincipal>(`/api/foreign-principals/${id}`, signal),
+  foreignPrincipalsByName: (name: string, country?: string, signal?: AbortSignal) =>
+    get<ForeignPrincipalByNameGroup[]>(`/api/foreign-principals/by-name${qs({ name, country })}`, signal),
+  searchForeignPrincipals: (
+    params: {
+      q?: string; country?: string; status?: "active" | "terminated"; sort?: ForeignPrincipalSort;
+      group_by_name?: boolean; offset?: number; limit?: number;
+    },
+    signal?: AbortSignal,
+  ) =>
     get<Page<ForeignPrincipal | ForeignPrincipalGrouped>>(
       `/api/foreign-principals${qs({ ...params, group_by_name: params.group_by_name === false ? "false" : undefined })}`,
+      signal,
     ),
 
-  document: (id: number) => get<RegistrantDoc>(`/api/documents/${id}`),
-  documentText: (id: number) => get<DocumentText>(`/api/documents/${id}/text`),
-  documentFields: (id: number) => get<ExtractedField[]>(`/api/documents/${id}/fields`),
-  documentSearch: (q: string, offset = 0, limit = 25) =>
-    get<Page<DocumentSearchResult>>(`/api/documents/search${qs({ q, offset, limit })}`),
-  listDocuments: (params: {
-    document_type?: string; registrant_id?: number; country?: string;
-    date_from?: string; date_to?: string; offset?: number; limit?: number;
-  }) => get<Page<RegistrantDoc>>(`/api/documents${qs(params)}`),
+  document: (id: number, signal?: AbortSignal) => get<RegistrantDoc>(`/api/documents/${id}`, signal),
+  documentText: (id: number, signal?: AbortSignal) => get<DocumentText>(`/api/documents/${id}/text`, signal),
+  documentFields: (id: number, signal?: AbortSignal) => get<ExtractedField[]>(`/api/documents/${id}/fields`, signal),
+  documentSearch: (q: string, offset = 0, limit = 25, signal?: AbortSignal) =>
+    get<Page<DocumentSearchResult>>(`/api/documents/search${qs({ q, offset, limit })}`, signal),
+  listDocuments: (
+    params: {
+      document_type?: string; registrant_id?: number; country?: string;
+      date_from?: string; date_to?: string; offset?: number; limit?: number;
+    },
+    signal?: AbortSignal,
+  ) => get<Page<RegistrantDoc>>(`/api/documents${qs(params)}`, signal),
 
-  countries: () => get<Country[]>("/api/countries"),
-  country: (name: string) => get<CountryDetail>(`/api/countries/${encodeURIComponent(name)}`),
-  countryTopics: (name: string) => get<TopicCount[]>(`/api/countries/${encodeURIComponent(name)}/topics`),
-  countryGraph: (name: string) => get<CountryGraph>(`/api/countries/${encodeURIComponent(name)}/graph`),
-  expandRegistrant: (countryName: string, registrantId: number) =>
+  countries: (signal?: AbortSignal) => get<Country[]>("/api/countries", signal),
+  country: (name: string, signal?: AbortSignal) => get<CountryDetail>(`/api/countries/${encodeURIComponent(name)}`, signal),
+  countryTopics: (name: string, signal?: AbortSignal) =>
+    get<TopicCount[]>(`/api/countries/${encodeURIComponent(name)}/topics`, signal),
+  countryGraph: (name: string, signal?: AbortSignal) =>
+    get<CountryGraph>(`/api/countries/${encodeURIComponent(name)}/graph`, signal),
+  expandRegistrant: (countryName: string, registrantId: number, signal?: AbortSignal) =>
     get<RegistrantExpansion>(
       `/api/countries/${encodeURIComponent(countryName)}/graph/registrants/${registrantId}/expand`,
+      signal,
     ),
-  topContacts: (name: string, limit = 25) =>
-    get<TopContact[]>(`/api/countries/${encodeURIComponent(name)}/top-contacts${qs({ limit })}`),
-  topRecipients: (name: string, limit = 25) =>
-    get<TopRecipient[]>(`/api/countries/${encodeURIComponent(name)}/top-recipients${qs({ limit })}`),
-  countryRegistrants: (name: string, params: { status?: "active" | "terminated"; offset?: number; limit?: number } = {}) =>
-    get<Page<RegistrantSummary>>(`/api/countries/${encodeURIComponent(name)}/registrants${qs(params)}`),
-  countryContacts: (name: string, offset = 0, limit = 25) =>
-    get<Page<CountryContact>>(`/api/countries/${encodeURIComponent(name)}/contacts${qs({ offset, limit })}`),
-  countryContributions: (name: string, offset = 0, limit = 25) =>
-    get<Page<CountryContribution>>(`/api/countries/${encodeURIComponent(name)}/contributions${qs({ offset, limit })}`),
-  topics: () => get<Topic[]>("/api/topics"),
+  topContacts: (name: string, limit = 25, signal?: AbortSignal) =>
+    get<TopContact[]>(`/api/countries/${encodeURIComponent(name)}/top-contacts${qs({ limit })}`, signal),
+  topRecipients: (name: string, limit = 25, signal?: AbortSignal) =>
+    get<TopRecipient[]>(`/api/countries/${encodeURIComponent(name)}/top-recipients${qs({ limit })}`, signal),
+  countryRegistrants: (
+    name: string,
+    params: { status?: "active" | "terminated"; offset?: number; limit?: number } = {},
+    signal?: AbortSignal,
+  ) => get<Page<RegistrantSummary>>(`/api/countries/${encodeURIComponent(name)}/registrants${qs(params)}`, signal),
+  countryContacts: (name: string, offset = 0, limit = 25, signal?: AbortSignal) =>
+    get<Page<CountryContact>>(`/api/countries/${encodeURIComponent(name)}/contacts${qs({ offset, limit })}`, signal),
+  countryContributions: (name: string, offset = 0, limit = 25, signal?: AbortSignal) =>
+    get<Page<CountryContribution>>(`/api/countries/${encodeURIComponent(name)}/contributions${qs({ offset, limit })}`, signal),
+  topics: (signal?: AbortSignal) => get<Topic[]>("/api/topics", signal),
 };

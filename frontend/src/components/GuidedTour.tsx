@@ -132,7 +132,6 @@ export function GuidedTour({ onDone }: { onDone: () => void }) {
 
   useEffect(() => {
     navigate(TOUR_STEPS[0].view);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function goTo(i: number) {

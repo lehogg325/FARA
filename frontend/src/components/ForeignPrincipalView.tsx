@@ -1,15 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { useStore } from "../state/store";
-
-function fmtDate(d: string | null): string {
-  return d ?? "—";
-}
+import { formatDate } from "../utils/format";
 
 export function ForeignPrincipalView({ id }: { id: number }) {
   const navigate = useStore((s) => s.navigate);
   const back = useStore((s) => s.back);
-  const fp = useQuery({ queryKey: ["foreign-principal", id], queryFn: () => api.foreignPrincipal(id) });
+  const fp = useQuery({ queryKey: ["foreign-principal", id], queryFn: ({ signal }) => api.foreignPrincipal(id, signal) });
 
   if (fp.isLoading) return <div className="loading">Loading…</div>;
   if (fp.isError || !fp.data) return <div className="error-state">Foreign principal not found.</div>;
@@ -30,11 +27,11 @@ export function ForeignPrincipalView({ id }: { id: number }) {
         </div>
         <div className="record-field">
           <div className="field-label">Registered</div>
-          <div className="field-value">{fmtDate(f.registration_date)}</div>
+          <div className="field-value">{formatDate(f.registration_date)}</div>
         </div>
         <div className="record-field">
           <div className="field-label">Terminated</div>
-          <div className="field-value">{fmtDate(f.termination_date)}</div>
+          <div className="field-value">{formatDate(f.termination_date)}</div>
         </div>
       </div>
 

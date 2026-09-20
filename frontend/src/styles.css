@@ -126,7 +126,7 @@ body {
   font-family: var(--serif-body);
   font-size: 13.5px;
 }
-.search-results li:hover { background: var(--indigo); }
+.search-results li:hover, .search-results li.active { background: var(--indigo); }
 .search-no-results { cursor: default; color: var(--gray); font-style: italic; }
 .search-no-results:hover { background: none; }
 .badge {
@@ -585,7 +585,7 @@ select {
   font-size: 13px;
   color: var(--lunar);
 }
-.graph-find-results li:hover { background: var(--indigo); }
+.graph-find-results li:hover, .graph-find-results li.active { background: var(--indigo); }
 .graph-controls { display: flex; gap: 6px; flex-shrink: 0; }
 .graph-control-btn {
   font-family: var(--mono);

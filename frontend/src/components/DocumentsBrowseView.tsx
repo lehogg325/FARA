@@ -2,12 +2,11 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { api } from "../api/client";
 import { useStore } from "../state/store";
+import { Pagination } from "./Pagination";
+import { formatDate } from "../utils/format";
+import { makeResetPage } from "../utils/pagination";
 
 const PAGE_SIZE = 25;
-
-function fmtDate(d: string | null): string {
-  return d ?? "—";
-}
 
 export function DocumentsBrowseView() {
   const navigate = useStore((s) => s.navigate);
@@ -19,11 +18,15 @@ export function DocumentsBrowseView() {
   const [dateTo, setDateTo] = useState("");
   const [offset, setOffset] = useState(0);
 
-  const documentTypes = useQuery({ queryKey: ["document-types"], queryFn: api.documentTypes, staleTime: Infinity });
-  const countries = useQuery({ queryKey: ["countries"], queryFn: api.countries, staleTime: Infinity });
+  const documentTypes = useQuery({
+    queryKey: ["document-types"], queryFn: ({ signal }) => api.documentTypes(signal), staleTime: Infinity,
+  });
+  const countries = useQuery({
+    queryKey: ["countries"], queryFn: ({ signal }) => api.countries(signal), staleTime: Infinity,
+  });
   const results = useQuery({
     queryKey: ["documents-browse", documentType, country, dateFrom, dateTo, offset],
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.listDocuments({
         document_type: documentType || undefined,
         country: country || undefined,
@@ -31,10 +34,10 @@ export function DocumentsBrowseView() {
         date_to: dateTo || undefined,
         offset,
         limit: PAGE_SIZE,
-      }),
+      }, signal),
   });
 
-  const resetPage = <T,>(setter: (v: T) => void) => (v: T) => { setter(v); setOffset(0); };
+  const resetPage = makeResetPage(setOffset);
 
   return (
     <div>
@@ -104,20 +107,14 @@ export function DocumentsBrowseView() {
                   <span className="row-meta">
                     {d.foreign_principal_name && `${d.foreign_principal_name} · `}
                     {d.foreign_principal_country_raw && `${d.foreign_principal_country_raw} · `}
-                    filed {fmtDate(d.date_stamped)}
+                    filed {formatDate(d.date_stamped)}
                   </span>
                 </button>
               </li>
             ))}
             {results.data.items.length === 0 && <li className="loading">No matches.</li>}
           </ul>
-          {results.data.total > PAGE_SIZE && (
-            <div className="pagination">
-              <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>&larr; Prev</button>
-              <span className="row-meta">{offset + 1}–{Math.min(offset + PAGE_SIZE, results.data.total)} of {results.data.total}</span>
-              <button disabled={offset + PAGE_SIZE >= results.data.total} onClick={() => setOffset(offset + PAGE_SIZE)}>Next &rarr;</button>
-            </div>
-          )}
+          <Pagination total={results.data.total} offset={offset} setOffset={setOffset} pageSize={PAGE_SIZE} />
         </>
       )}
     </div>

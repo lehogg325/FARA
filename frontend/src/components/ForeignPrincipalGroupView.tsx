@@ -7,7 +7,7 @@ export function ForeignPrincipalGroupView({ name, country }: { name: string; cou
   const back = useStore((s) => s.back);
   const groups = useQuery({
     queryKey: ["fp-by-name", name, country],
-    queryFn: () => api.foreignPrincipalsByName(name, country ?? undefined),
+    queryFn: ({ signal }) => api.foreignPrincipalsByName(name, country ?? undefined, signal),
   });
 
   if (groups.isLoading) return <div className="loading">Loading…</div>;

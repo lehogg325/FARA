@@ -1,41 +1,34 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { api } from "../api/client";
 import { useStore } from "../state/store";
+import { Pagination } from "./Pagination";
+import { formatDate } from "../utils/format";
+import { makeResetPage } from "../utils/pagination";
+import { useDebouncedSearch } from "../hooks/useDebouncedSearch";
 
 const PAGE_SIZE = 25;
-
-function fmtDate(d: string | null): string {
-  return d ?? "—";
-}
 
 export function RegistrantsBrowseView() {
   const navigate = useStore((s) => s.navigate);
   const back = useStore((s) => s.back);
 
-  const [qInput, setQInput] = useState("");
-  const [q, setQ] = useState("");
   const [status, setStatus] = useState<"" | "active" | "terminated">("");
   const [offset, setOffset] = useState(0);
-
-  // Debounce the free-text search so it doesn't fire on every keystroke.
-  useEffect(() => {
-    const handle = setTimeout(() => { setQ(qInput.trim()); setOffset(0); }, 250);
-    return () => clearTimeout(handle);
-  }, [qInput]);
+  const [qInput, setQInput, q] = useDebouncedSearch(() => setOffset(0));
 
   const results = useQuery({
     queryKey: ["registrants-browse", q, status, offset],
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.listRegistrants({
         q: q || undefined,
         status: status || undefined,
         offset,
         limit: PAGE_SIZE,
-      }),
+      }, signal),
   });
 
-  const resetPage = <T,>(setter: (v: T) => void) => (v: T) => { setter(v); setOffset(0); };
+  const resetPage = makeResetPage(setOffset);
 
   return (
     <div>
@@ -85,20 +78,14 @@ export function RegistrantsBrowseView() {
                   <span className="row-meta">
                     {[r.city, r.state].filter(Boolean).join(", ") || "—"}
                     <span className={`status-pill ${r.status}`} style={{ marginLeft: 6 }}>{r.status}</span>
-                    {" · "}registered {fmtDate(r.registration_date)}
+                    {" · "}registered {formatDate(r.registration_date)}
                   </span>
                 </button>
               </li>
             ))}
             {results.data.items.length === 0 && <li className="loading">No matches.</li>}
           </ul>
-          {results.data.total > PAGE_SIZE && (
-            <div className="pagination">
-              <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>&larr; Prev</button>
-              <span className="row-meta">{offset + 1}–{Math.min(offset + PAGE_SIZE, results.data.total)} of {results.data.total}</span>
-              <button disabled={offset + PAGE_SIZE >= results.data.total} onClick={() => setOffset(offset + PAGE_SIZE)}>Next &rarr;</button>
-            </div>
-          )}
+          <Pagination total={results.data.total} offset={offset} setOffset={setOffset} pageSize={PAGE_SIZE} />
         </>
       )}
     </div>

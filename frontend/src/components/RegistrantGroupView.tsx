@@ -1,15 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { useStore } from "../state/store";
-
-function fmtDate(d: string | null): string {
-  return d ?? "—";
-}
+import { formatDate } from "../utils/format";
 
 export function RegistrantGroupView({ name }: { name: string }) {
   const navigate = useStore((s) => s.navigate);
   const back = useStore((s) => s.back);
-  const group = useQuery({ queryKey: ["registrants-by-name", name], queryFn: () => api.registrantsByName(name) });
+  const group = useQuery({ queryKey: ["registrants-by-name", name], queryFn: ({ signal }) => api.registrantsByName(name, signal) });
 
   if (group.isLoading) return <div className="loading">Loading…</div>;
   if (group.isError || !group.data) return <div className="error-state">No registrants found with that name.</div>;
@@ -35,7 +32,7 @@ export function RegistrantGroupView({ name }: { name: string }) {
                   <span className={`status-pill ${r.status}`}>{r.status}</span>
                 </span>
                 <span className="row-meta">
-                  {fmtDate(r.registration_date)} — {fmtDate(r.termination_date)}
+                  {formatDate(r.registration_date)} — {formatDate(r.termination_date)}
                 </span>
               </button>
             </li>

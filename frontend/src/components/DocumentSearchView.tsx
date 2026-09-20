@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { api } from "../api/client";
 import { useStore } from "../state/store";
+import { Pagination } from "./Pagination";
 
 const PAGE_SIZE = 15;
 
@@ -30,7 +31,7 @@ export function DocumentSearchView({ q }: { q: string }) {
 
   const results = useQuery({
     queryKey: ["doc-search", q, offset],
-    queryFn: () => api.documentSearch(q, offset, PAGE_SIZE),
+    queryFn: ({ signal }) => api.documentSearch(q, offset, PAGE_SIZE, signal),
   });
 
   return (
@@ -41,6 +42,7 @@ export function DocumentSearchView({ q }: { q: string }) {
       <h2 className="record-title">"{q}"</h2>
 
       {results.isLoading && <div className="loading">Searching…</div>}
+      {results.isError && <div className="error-state">Could not load results.</div>}
       {results.data && (
         <>
           <div className="record-sub">{results.data.total.toLocaleString()} matching filings</div>
@@ -62,19 +64,7 @@ export function DocumentSearchView({ q }: { q: string }) {
               </li>
             ))}
           </ul>
-          {results.data.total > PAGE_SIZE && (
-            <div className="pagination">
-              <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>
-                &larr; Prev
-              </button>
-              <span className="row-meta">
-                {offset + 1}–{Math.min(offset + PAGE_SIZE, results.data.total)} of {results.data.total}
-              </span>
-              <button disabled={offset + PAGE_SIZE >= results.data.total} onClick={() => setOffset(offset + PAGE_SIZE)}>
-                Next &rarr;
-              </button>
-            </div>
-          )}
+          <Pagination total={results.data.total} offset={offset} setOffset={setOffset} pageSize={PAGE_SIZE} />
         </>
       )}
     </div>

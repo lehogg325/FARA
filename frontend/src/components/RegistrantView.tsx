@@ -2,12 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { api } from "../api/client";
 import { useStore } from "../state/store";
+import { Pagination } from "./Pagination";
+import { formatDate } from "../utils/format";
 
 const PAGE_SIZE = 10;
-
-function fmtDate(d: string | null): string {
-  return d ?? "—";
-}
 
 export function RegistrantView({ id }: { id: number }) {
   const navigate = useStore((s) => s.navigate);
@@ -16,18 +14,18 @@ export function RegistrantView({ id }: { id: number }) {
   const [sfOffset, setSfOffset] = useState(0);
   const [docOffset, setDocOffset] = useState(0);
 
-  const registrant = useQuery({ queryKey: ["registrant", id], queryFn: () => api.registrant(id) });
+  const registrant = useQuery({ queryKey: ["registrant", id], queryFn: ({ signal }) => api.registrant(id, signal) });
   const foreignPrincipals = useQuery({
     queryKey: ["registrant-fps", id, fpOffset],
-    queryFn: () => api.registrantForeignPrincipals(id, fpOffset, PAGE_SIZE),
+    queryFn: ({ signal }) => api.registrantForeignPrincipals(id, fpOffset, PAGE_SIZE, signal),
   });
   const shortForms = useQuery({
     queryKey: ["registrant-sfs", id, sfOffset],
-    queryFn: () => api.registrantShortForms(id, sfOffset, PAGE_SIZE),
+    queryFn: ({ signal }) => api.registrantShortForms(id, sfOffset, PAGE_SIZE, signal),
   });
   const documents = useQuery({
     queryKey: ["registrant-docs", id, docOffset],
-    queryFn: () => api.registrantDocuments(id, docOffset, PAGE_SIZE),
+    queryFn: ({ signal }) => api.registrantDocuments(id, docOffset, PAGE_SIZE, signal),
   });
 
   if (registrant.isLoading) return <div className="loading">Loading…</div>;
@@ -55,11 +53,11 @@ export function RegistrantView({ id }: { id: number }) {
         </div>
         <div className="record-field">
           <div className="field-label">Registered</div>
-          <div className="field-value">{fmtDate(r.registration_date)}</div>
+          <div className="field-value">{formatDate(r.registration_date)}</div>
         </div>
         <div className="record-field">
           <div className="field-label">Terminated</div>
-          <div className="field-value">{fmtDate(r.termination_date)}</div>
+          <div className="field-value">{formatDate(r.termination_date)}</div>
         </div>
       </div>
 
@@ -67,12 +65,13 @@ export function RegistrantView({ id }: { id: number }) {
         title="Foreign principals"
         count={r.foreign_principal_count}
         page={foreignPrincipals.data}
+        isError={foreignPrincipals.isError}
         offset={fpOffset}
         setOffset={setFpOffset}
         renderItem={(fp) => (
           <button className="row-btn" onClick={() => navigate({ kind: "foreign-principal", id: fp.foreign_principal_id })}>
             <span>{fp.foreign_principal_name}</span>
-            <span className="row-meta">{fp.country_raw ?? "—"} · {fmtDate(fp.registration_date)}</span>
+            <span className="row-meta">{fp.country_raw ?? "—"} · {formatDate(fp.registration_date)}</span>
           </button>
         )}
         keyOf={(fp) => fp.foreign_principal_id}
@@ -82,12 +81,13 @@ export function RegistrantView({ id }: { id: number }) {
         title="Registered agents (short-form)"
         count={r.short_form_registrant_count}
         page={shortForms.data}
+        isError={shortForms.isError}
         offset={sfOffset}
         setOffset={setSfOffset}
         renderItem={(sf) => (
           <div className="row-btn" style={{ cursor: "default" }}>
             <span>{[sf.first_name, sf.last_name].filter(Boolean).join(" ") || "(unnamed)"}</span>
-            <span className="row-meta">{fmtDate(sf.short_form_date)}</span>
+            <span className="row-meta">{formatDate(sf.short_form_date)}</span>
           </div>
         )}
         keyOf={(sf) => sf.short_form_registrant_id}
@@ -97,12 +97,13 @@ export function RegistrantView({ id }: { id: number }) {
         title="Documents"
         count={r.document_count}
         page={documents.data}
+        isError={documents.isError}
         offset={docOffset}
         setOffset={setDocOffset}
         renderItem={(doc) => (
           <button className="row-btn" onClick={() => navigate({ kind: "document", id: doc.registrant_doc_id })}>
             <span>{doc.document_type_raw_label}</span>
-            <span className="row-meta">{fmtDate(doc.date_stamped)}</span>
+            <span className="row-meta">{formatDate(doc.date_stamped)}</span>
           </button>
         )}
         keyOf={(doc) => doc.registrant_doc_id}
@@ -112,11 +113,12 @@ export function RegistrantView({ id }: { id: number }) {
 }
 
 function Section<T>({
-  title, count, page, offset, setOffset, renderItem, keyOf,
+  title, count, page, isError, offset, setOffset, renderItem, keyOf,
 }: {
   title: string;
   count: number;
   page: { items: T[]; total: number } | undefined;
+  isError: boolean;
   offset: number;
   setOffset: (n: number) => void;
   renderItem: (item: T) => React.ReactNode;
@@ -127,7 +129,9 @@ function Section<T>({
       <div className="section-title">
         {title} <span className="count">({count.toLocaleString()})</span>
       </div>
-      {!page ? (
+      {isError ? (
+        <div className="error-state">Could not load {title.toLowerCase()}.</div>
+      ) : !page ? (
         <div className="loading">Loading…</div>
       ) : page.items.length === 0 ? (
         <div className="loading">None on file.</div>
@@ -138,19 +142,7 @@ function Section<T>({
               <li key={keyOf(item)}>{renderItem(item)}</li>
             ))}
           </ul>
-          {page.total > PAGE_SIZE && (
-            <div className="pagination">
-              <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>
-                &larr; Prev
-              </button>
-              <span className="row-meta">
-                {offset + 1}–{Math.min(offset + PAGE_SIZE, page.total)} of {page.total}
-              </span>
-              <button disabled={offset + PAGE_SIZE >= page.total} onClick={() => setOffset(offset + PAGE_SIZE)}>
-                Next &rarr;
-              </button>
-            </div>
-          )}
+          <Pagination total={page.total} offset={offset} setOffset={setOffset} pageSize={PAGE_SIZE} />
         </>
       )}
     </div>

@@ -2,29 +2,16 @@ import { useQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { api } from "../api/client";
 import { GraphView, type GraphViewHandle } from "./GraphView";
+import { Pagination } from "./Pagination";
 import { Tabs } from "./Tabs";
 import { TopEntityList } from "./TopEntityList";
 import { useStore } from "../state/store";
+import { formatCurrency, formatDate } from "../utils/format";
 
 const DRILLDOWN_PAGE_SIZE = 25;
 
-function fmtDate(d: string | null): string {
-  return d ?? "—";
-}
-
 function fmtMoney(n: number): string {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
-}
-
-function Pagination({ total, offset, setOffset }: { total: number; offset: number; setOffset: (o: number) => void }) {
-  if (total <= DRILLDOWN_PAGE_SIZE) return null;
-  return (
-    <div className="pagination">
-      <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - DRILLDOWN_PAGE_SIZE))}>&larr; Prev</button>
-      <span className="row-meta">{offset + 1}–{Math.min(offset + DRILLDOWN_PAGE_SIZE, total)} of {total}</span>
-      <button disabled={offset + DRILLDOWN_PAGE_SIZE >= total} onClick={() => setOffset(offset + DRILLDOWN_PAGE_SIZE)}>Next &rarr;</button>
-    </div>
-  );
+  return formatCurrency(n, { maximumFractionDigits: 0 })!;
 }
 
 function RegistrantsDrilldown({ name }: { name: string }) {
@@ -32,9 +19,10 @@ function RegistrantsDrilldown({ name }: { name: string }) {
   const [offset, setOffset] = useState(0);
   const results = useQuery({
     queryKey: ["country-registrants", name, offset],
-    queryFn: () => api.countryRegistrants(name, { status: "active", offset, limit: DRILLDOWN_PAGE_SIZE }),
+    queryFn: ({ signal }) => api.countryRegistrants(name, { status: "active", offset, limit: DRILLDOWN_PAGE_SIZE }, signal),
   });
   if (results.isLoading) return <div className="loading">Loading…</div>;
+  if (results.isError) return <div className="error-state">Could not load results.</div>;
   if (!results.data) return null;
   return (
     <div>
@@ -49,7 +37,7 @@ function RegistrantsDrilldown({ name }: { name: string }) {
         ))}
         {results.data.items.length === 0 && <li className="loading">No matches.</li>}
       </ul>
-      <Pagination total={results.data.total} offset={offset} setOffset={setOffset} />
+      <Pagination total={results.data.total} offset={offset} setOffset={setOffset} pageSize={DRILLDOWN_PAGE_SIZE} />
     </div>
   );
 }
@@ -59,10 +47,11 @@ function ForeignPrincipalsDrilldown({ name }: { name: string }) {
   const [offset, setOffset] = useState(0);
   const results = useQuery({
     queryKey: ["country-foreign-principals", name, offset],
-    queryFn: () =>
-      api.searchForeignPrincipals({ country: name, group_by_name: false, offset, limit: DRILLDOWN_PAGE_SIZE }),
+    queryFn: ({ signal }) =>
+      api.searchForeignPrincipals({ country: name, group_by_name: false, offset, limit: DRILLDOWN_PAGE_SIZE }, signal),
   });
   if (results.isLoading) return <div className="loading">Loading…</div>;
+  if (results.isError) return <div className="error-state">Could not load results.</div>;
   if (!results.data) return null;
   const items = results.data.items.filter((fp): fp is Extract<typeof fp, { foreign_principal_id: number }> =>
     "foreign_principal_id" in fp,
@@ -80,7 +69,7 @@ function ForeignPrincipalsDrilldown({ name }: { name: string }) {
         ))}
         {items.length === 0 && <li className="loading">No matches.</li>}
       </ul>
-      <Pagination total={results.data.total} offset={offset} setOffset={setOffset} />
+      <Pagination total={results.data.total} offset={offset} setOffset={setOffset} pageSize={DRILLDOWN_PAGE_SIZE} />
     </div>
   );
 }
@@ -90,9 +79,10 @@ function ContactsDrilldown({ name }: { name: string }) {
   const [offset, setOffset] = useState(0);
   const results = useQuery({
     queryKey: ["country-contacts", name, offset],
-    queryFn: () => api.countryContacts(name, offset, DRILLDOWN_PAGE_SIZE),
+    queryFn: ({ signal }) => api.countryContacts(name, offset, DRILLDOWN_PAGE_SIZE, signal),
   });
   if (results.isLoading) return <div className="loading">Loading…</div>;
+  if (results.isError) return <div className="error-state">Could not load results.</div>;
   if (!results.data) return null;
   return (
     <div>
@@ -107,14 +97,14 @@ function ContactsDrilldown({ name }: { name: string }) {
               <span className="row-meta">
                 {c.registrant_name}
                 {c.contact_method && ` · ${c.contact_method}`}
-                {" · "}{fmtDate(c.contact_date)}
+                {" · "}{formatDate(c.contact_date)}
               </span>
             </button>
           </li>
         ))}
         {results.data.items.length === 0 && <li className="loading">No matches.</li>}
       </ul>
-      <Pagination total={results.data.total} offset={offset} setOffset={setOffset} />
+      <Pagination total={results.data.total} offset={offset} setOffset={setOffset} pageSize={DRILLDOWN_PAGE_SIZE} />
     </div>
   );
 }
@@ -124,9 +114,10 @@ function ContributionsDrilldown({ name }: { name: string }) {
   const [offset, setOffset] = useState(0);
   const results = useQuery({
     queryKey: ["country-contributions", name, offset],
-    queryFn: () => api.countryContributions(name, offset, DRILLDOWN_PAGE_SIZE),
+    queryFn: ({ signal }) => api.countryContributions(name, offset, DRILLDOWN_PAGE_SIZE, signal),
   });
   if (results.isLoading) return <div className="loading">Loading…</div>;
+  if (results.isError) return <div className="error-state">Could not load results.</div>;
   if (!results.data) return null;
   return (
     <div>
@@ -138,14 +129,14 @@ function ContributionsDrilldown({ name }: { name: string }) {
               <span className="row-meta">
                 {c.registrant_name}
                 {c.amount !== null && ` · ${fmtMoney(c.amount)}`}
-                {" · "}{fmtDate(c.contribution_date)}
+                {" · "}{formatDate(c.contribution_date)}
               </span>
             </button>
           </li>
         ))}
         {results.data.items.length === 0 && <li className="loading">No matches.</li>}
       </ul>
-      <Pagination total={results.data.total} offset={offset} setOffset={setOffset} />
+      <Pagination total={results.data.total} offset={offset} setOffset={setOffset} pageSize={DRILLDOWN_PAGE_SIZE} />
     </div>
   );
 }
@@ -153,7 +144,7 @@ function ContributionsDrilldown({ name }: { name: string }) {
 type DrilldownKey = "registrants" | "foreign_principals" | "contacts" | "contributions";
 
 function OverviewTab({ name }: { name: string }) {
-  const detail = useQuery({ queryKey: ["country", name], queryFn: () => api.country(name) });
+  const detail = useQuery({ queryKey: ["country", name], queryFn: ({ signal }) => api.country(name, signal) });
   const [expanded, setExpanded] = useState<DrilldownKey | null>(null);
   if (detail.isLoading) return <div className="loading">Loading…</div>;
   if (detail.isError || !detail.data) return <div className="error-state">Country not found.</div>;
@@ -205,12 +196,14 @@ function OverviewTab({ name }: { name: string }) {
 }
 
 function TopicsTab({ name }: { name: string }) {
-  const topics = useQuery({ queryKey: ["country-topics", name], queryFn: () => api.countryTopics(name) });
+  const topics = useQuery({ queryKey: ["country-topics", name], queryFn: ({ signal }) => api.countryTopics(name, signal) });
   const maxCount = Math.max(1, ...(topics.data?.map((t) => t.document_count) ?? [1]));
 
   return (
     <div className="section" style={{ marginTop: 0 }}>
       <div className="section-title">What {name} is lobbying on</div>
+      {topics.isLoading && <div className="loading">Loading…</div>}
+      {topics.isError && <div className="error-state">Could not load topics.</div>}
       {topics.data && topics.data.length === 0 && <div className="loading">No topics classified yet.</div>}
       {topics.data && topics.data.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -237,13 +230,14 @@ function TopicsTab({ name }: { name: string }) {
 }
 
 function NetworkTab({ name }: { name: string }) {
-  const graph = useQuery({ queryKey: ["country-graph", name], queryFn: () => api.countryGraph(name) });
+  const graph = useQuery({ queryKey: ["country-graph", name], queryFn: ({ signal }) => api.countryGraph(name, signal) });
   const graphRef = useRef<GraphViewHandle>(null);
 
   return (
     <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "flex-start" }}>
       <div style={{ flex: "2 1 520px", minWidth: 320 }}>
         {graph.isLoading && <div className="loading">Loading graph…</div>}
+        {graph.isError && <div className="error-state">Could not load graph.</div>}
         {graph.data && <GraphView ref={graphRef} countryName={name} data={graph.data} />}
       </div>
       <div style={{ flex: "1 1 280px", minWidth: 260 }}>

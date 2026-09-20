@@ -17,8 +17,8 @@ function withPriorityFirst(countries: Country[]): Country[] {
 }
 
 export function EmptyState() {
-  const meta = useQuery({ queryKey: ["meta"], queryFn: api.meta, staleTime: Infinity });
-  const countries = useQuery({ queryKey: ["countries"], queryFn: api.countries, staleTime: Infinity });
+  const meta = useQuery({ queryKey: ["meta"], queryFn: ({ signal }) => api.meta(signal), staleTime: Infinity });
+  const countries = useQuery({ queryKey: ["countries"], queryFn: ({ signal }) => api.countries(signal), staleTime: Infinity });
   const navigate = useStore((s) => s.navigate);
   const [textQuery, setTextQuery] = useState("");
   const topCountries = withPriorityFirst((countries.data ?? []).filter((c) => c.registrant_count > 0)).slice(0, 12);

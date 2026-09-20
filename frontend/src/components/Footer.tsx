@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 
 export function Footer() {
-  const meta = useQuery({ queryKey: ["meta"], queryFn: api.meta, staleTime: Infinity });
+  const meta = useQuery({ queryKey: ["meta"], queryFn: ({ signal }) => api.meta(signal), staleTime: Infinity });
   if (!meta.data) return null;
   const llm = meta.data.extraction_coverage.find((c) => c.stage === "fields_llm");
   return (

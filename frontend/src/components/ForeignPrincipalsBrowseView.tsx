@@ -1,13 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { api, type ForeignPrincipal, type ForeignPrincipalGrouped, type ForeignPrincipalSort } from "../api/client";
 import { useStore } from "../state/store";
+import { Pagination } from "./Pagination";
+import { formatDate } from "../utils/format";
+import { makeResetPage } from "../utils/pagination";
+import { useDebouncedSearch } from "../hooks/useDebouncedSearch";
 
 const PAGE_SIZE = 25;
-
-function fmtDate(d: string | null): string {
-  return d ?? "—";
-}
 
 function isGrouped(item: ForeignPrincipal | ForeignPrincipalGrouped): item is ForeignPrincipalGrouped {
   return "registrant_count" in item;
@@ -17,24 +17,19 @@ export function ForeignPrincipalsBrowseView() {
   const navigate = useStore((s) => s.navigate);
   const back = useStore((s) => s.back);
 
-  const [qInput, setQInput] = useState("");
-  const [q, setQ] = useState("");
   const [country, setCountry] = useState("");
   const [status, setStatus] = useState<"" | "active" | "terminated">("");
   const [sort, setSort] = useState<ForeignPrincipalSort>("registration_date_desc");
   const [groupByName, setGroupByName] = useState(true);
   const [offset, setOffset] = useState(0);
+  const [qInput, setQInput, q] = useDebouncedSearch(() => setOffset(0));
 
-  // Debounce the free-text search so it doesn't fire on every keystroke.
-  useEffect(() => {
-    const handle = setTimeout(() => { setQ(qInput.trim()); setOffset(0); }, 250);
-    return () => clearTimeout(handle);
-  }, [qInput]);
-
-  const countries = useQuery({ queryKey: ["countries"], queryFn: api.countries, staleTime: Infinity });
+  const countries = useQuery({
+    queryKey: ["countries"], queryFn: ({ signal }) => api.countries(signal), staleTime: Infinity,
+  });
   const results = useQuery({
     queryKey: ["fp-browse", q, country, status, sort, groupByName, offset],
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       api.searchForeignPrincipals({
         q: q || undefined,
         country: country || undefined,
@@ -43,10 +38,10 @@ export function ForeignPrincipalsBrowseView() {
         group_by_name: groupByName,
         offset,
         limit: PAGE_SIZE,
-      }),
+      }, signal),
   });
 
-  const resetPage = <T,>(setter: (v: T) => void) => (v: T) => { setter(v); setOffset(0); };
+  const resetPage = makeResetPage(setOffset);
 
   return (
     <div>
@@ -118,7 +113,7 @@ export function ForeignPrincipalsBrowseView() {
                     <span className="row-meta">
                       {fp.registrant_count} registrant{fp.registrant_count === 1 ? "" : "s"}: {fp.sample_registrant_names.join(", ")}
                       {fp.registrant_count > fp.sample_registrant_names.length ? "…" : ""}
-                      {" · "}latest {fmtDate(fp.latest_registration_date)}
+                      {" · "}latest {formatDate(fp.latest_registration_date)}
                     </span>
                   </button>
                 </li>
@@ -136,7 +131,7 @@ export function ForeignPrincipalsBrowseView() {
                     <span className="row-meta">
                       represented by {fp.registrant_name}
                       <span className={`status-pill ${fp.registrant_status}`} style={{ marginLeft: 6 }}>{fp.registrant_status}</span>
-                      {" · "}registered {fmtDate(fp.registration_date)}
+                      {" · "}registered {formatDate(fp.registration_date)}
                     </span>
                   </button>
                 </li>
@@ -144,13 +139,7 @@ export function ForeignPrincipalsBrowseView() {
             )}
             {results.data.items.length === 0 && <li className="loading">No matches.</li>}
           </ul>
-          {results.data.total > PAGE_SIZE && (
-            <div className="pagination">
-              <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>&larr; Prev</button>
-              <span className="row-meta">{offset + 1}–{Math.min(offset + PAGE_SIZE, results.data.total)} of {results.data.total}</span>
-              <button disabled={offset + PAGE_SIZE >= results.data.total} onClick={() => setOffset(offset + PAGE_SIZE)}>Next &rarr;</button>
-            </div>
-          )}
+          <Pagination total={results.data.total} offset={offset} setOffset={setOffset} pageSize={PAGE_SIZE} />
         </>
       )}
     </div>

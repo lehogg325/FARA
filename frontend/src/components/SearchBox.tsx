@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { api, type SearchResult } from "../api/client";
 import { useStore } from "../state/store";
 
@@ -13,10 +13,12 @@ export function SearchBox() {
   const [q, setQ] = useState("");
   const [results, setResults] = useState<SearchResult[] | null>(null);
   const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
   const navigate = useStore((s) => s.navigate);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
+    setActiveIndex(-1);
     if (q.trim().length < 2) {
       setResults(null);
       return;
@@ -39,6 +41,7 @@ export function SearchBox() {
     setOpen(false);
     setQ("");
     setResults(null);
+    setActiveIndex(-1);
     const grouped = (hit.group_count ?? 1) > 1;
     if (hit.entity_type === "country") navigate({ kind: "country", name: hit.label });
     else if (hit.entity_type === "registrant" && grouped) navigate({ kind: "registrant-group", name: hit.label });
@@ -47,6 +50,29 @@ export function SearchBox() {
     else if (hit.entity_type === "foreign_principal" && hit.entity_id !== null) navigate({ kind: "foreign-principal", id: hit.entity_id });
     else if (hit.entity_id !== null) navigate({ kind: "registrant", id: hit.entity_id }); // short-form agents: not their own view yet
   };
+
+  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (!open || !results || results.length === 0) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIndex((i) => Math.min(i + 1, results.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIndex((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter") {
+      if (activeIndex >= 0) {
+        e.preventDefault();
+        select(results[activeIndex]);
+      }
+    } else if (e.key === "Escape") {
+      setOpen(false);
+    }
+  };
+
+  const activeId =
+    activeIndex >= 0 && results?.[activeIndex]
+      ? `search-hit-${results[activeIndex].entity_type}-${results[activeIndex].entity_id}-${activeIndex}`
+      : undefined;
 
   return (
     <div className="searchbox">
@@ -57,14 +83,28 @@ export function SearchBox() {
         onChange={(e) => setQ(e.target.value)}
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onKeyDown={onKeyDown}
+        role="combobox"
+        aria-expanded={open && results !== null}
+        aria-controls="search-results-listbox"
+        aria-autocomplete="list"
+        aria-activedescendant={activeId}
       />
       {open && results !== null && (
-        <ul className="search-results">
+        <ul className="search-results" id="search-results-listbox" role="listbox">
           {results.length === 0 ? (
             <li className="search-no-results">No matches</li>
           ) : (
-            results.map((r) => (
-              <li key={`${r.entity_type}-${r.entity_id}-${r.label}`} onClick={() => select(r)}>
+            results.map((r, i) => (
+              <li
+                key={`${r.entity_type}-${r.entity_id}-${r.label}`}
+                id={`search-hit-${r.entity_type}-${r.entity_id}-${i}`}
+                role="option"
+                aria-selected={i === activeIndex}
+                className={i === activeIndex ? "active" : undefined}
+                onMouseEnter={() => setActiveIndex(i)}
+                onMouseDown={() => select(r)}
+              >
                 <span className={`badge badge-${r.entity_type}`}>{BADGE_LABEL[r.entity_type]}</span>
                 <span className="hit-label">
                   {r.label || "(unnamed)"}
