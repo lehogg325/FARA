@@ -7,9 +7,13 @@ from fara_backend.db import get_db
 from fara_backend.graph import build_country_graph, build_registrant_expansion, top_contacts, top_recipients
 from fara_backend.schemas import (
     Country,
+    CountryContact,
+    CountryContribution,
     CountryDetail,
     CountryGraph,
+    Page,
     RegistrantExpansion,
+    RegistrantSummary,
     TopContact,
     TopicCount,
     TopRecipient,
@@ -94,6 +98,125 @@ def get_country(
         contribution_count=contrib_row["contribution_count"],
         contribution_total=contrib_row["contribution_total"],
     )
+
+
+@router.get("/{country_name}/registrants", response_model=Page[RegistrantSummary])
+def get_country_registrants(
+    country_name: str,
+    jurisdiction: str = Query("fara"),
+    status: str | None = Query(None, pattern="^(active|terminated)$"),
+    limit: int = Query(25, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    conn: psycopg.Connection = Depends(get_db),
+) -> Page[RegistrantSummary]:
+    where = ["fp.jurisdiction = %(j)s", "fp.country_raw = %(country)s"]
+    params: dict = {"j": jurisdiction, "country": country_name, "limit": limit, "offset": offset}
+    if status:
+        where.append("r.status = %(status)s")
+        params["status"] = status
+    where_sql = " AND ".join(where)
+
+    # DISTINCT r.* matches get_country()'s count(DISTINCT r.registrant_id) above —
+    # a registrant with two foreign_principals rows for this country (e.g. a
+    # re-registration) isn't listed twice.
+    total = conn.execute(
+        f"""
+        SELECT count(DISTINCT r.registrant_id) AS n
+        FROM registrants r JOIN foreign_principals fp ON fp.registrant_id = r.registrant_id
+        WHERE {where_sql}
+        """,
+        params,
+    ).fetchone()["n"]
+    rows = conn.execute(
+        f"""
+        SELECT DISTINCT r.*
+        FROM registrants r JOIN foreign_principals fp ON fp.registrant_id = r.registrant_id
+        WHERE {where_sql}
+        ORDER BY r.name LIMIT %(limit)s OFFSET %(offset)s
+        """,
+        params,
+    ).fetchall()
+    return Page(items=[RegistrantSummary(**r) for r in rows], total=total, limit=limit, offset=offset)
+
+
+@router.get("/{country_name}/contacts", response_model=Page[CountryContact])
+def get_country_contacts(
+    country_name: str,
+    jurisdiction: str = Query("fara"),
+    limit: int = Query(25, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    conn: psycopg.Connection = Depends(get_db),
+) -> Page[CountryContact]:
+    params = {"j": jurisdiction, "country": country_name, "limit": limit, "offset": offset}
+    # Same join shape as get_country()'s contact_row above, so this total always
+    # matches the number that was clicked.
+    total = conn.execute(
+        """
+        SELECT count(*) AS n
+        FROM reportable_contacts rc
+        JOIN registrant_docs rd ON rd.registrant_doc_id = rc.registrant_doc_id
+        JOIN foreign_principals fp ON fp.registrant_id = rd.registrant_id
+        WHERE fp.jurisdiction = %(j)s AND fp.country_raw = %(country)s
+        """,
+        params,
+    ).fetchone()["n"]
+    rows = conn.execute(
+        """
+        SELECT rc.reportable_contact_id, rc.registrant_doc_id, rd.registrant_id, r.name AS registrant_name,
+               rc.contact_date, rc.contact_name_raw, rc.contact_method, rc.purpose
+        FROM reportable_contacts rc
+        JOIN registrant_docs rd ON rd.registrant_doc_id = rc.registrant_doc_id
+        JOIN foreign_principals fp ON fp.registrant_id = rd.registrant_id
+        JOIN registrants r ON r.registrant_id = rd.registrant_id
+        WHERE fp.jurisdiction = %(j)s AND fp.country_raw = %(country)s
+        ORDER BY rc.contact_date DESC NULLS LAST
+        LIMIT %(limit)s OFFSET %(offset)s
+        """,
+        params,
+    ).fetchall()
+    return Page(items=[CountryContact(**r) for r in rows], total=total, limit=limit, offset=offset)
+
+
+@router.get("/{country_name}/contributions", response_model=Page[CountryContribution])
+def get_country_contributions(
+    country_name: str,
+    jurisdiction: str = Query("fara"),
+    limit: int = Query(25, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    conn: psycopg.Connection = Depends(get_db),
+) -> Page[CountryContribution]:
+    params = {"j": jurisdiction, "country": country_name, "limit": limit, "offset": offset}
+    # Same join shape as get_country()'s contrib_row above, so this total always
+    # matches the number that was clicked. Each political_contribution[N] field_key
+    # is already one full contribution record (text=recipient, numeric=amount,
+    # date=date) — confirmed live, not split across multiple field_keys — so this
+    # is a plain SELECT, not a re-aggregation.
+    total = conn.execute(
+        """
+        SELECT count(*) AS n
+        FROM document_extracted_fields def
+        JOIN registrant_docs rd ON rd.registrant_doc_id = def.registrant_doc_id
+        JOIN foreign_principals fp ON fp.registrant_id = rd.registrant_id
+        WHERE fp.jurisdiction = %(j)s AND fp.country_raw = %(country)s AND def.field_key LIKE 'political_contribution[%%'
+        """,
+        params,
+    ).fetchone()["n"]
+    rows = conn.execute(
+        """
+        SELECT rd.registrant_doc_id, rd.registrant_id, r.name AS registrant_name,
+               def.field_value_text AS recipient_raw, def.field_value_numeric AS amount,
+               def.field_value_date AS contribution_date
+        FROM document_extracted_fields def
+        JOIN registrant_docs rd ON rd.registrant_doc_id = def.registrant_doc_id
+        JOIN foreign_principals fp ON fp.registrant_id = rd.registrant_id
+        JOIN registrants r ON r.registrant_id = rd.registrant_id
+        WHERE fp.jurisdiction = %(j)s AND fp.country_raw = %(country)s AND def.field_key LIKE 'political_contribution[%%'
+        ORDER BY def.field_value_date DESC NULLS LAST
+        LIMIT %(limit)s OFFSET %(offset)s
+        """,
+        params,
+    ).fetchall()
+    return Page(items=[CountryContribution(**r) for r in rows], total=total, limit=limit, offset=offset)
 
 
 @router.get("/{country_name}/topics", response_model=list[TopicCount])

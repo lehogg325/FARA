@@ -46,6 +46,87 @@ def test_get_country_detail_404_for_unknown_country(client, seeded):
     assert resp.status_code == 404
 
 
+def test_country_registrants(client, seeded):
+    resp = client.get("/api/countries/ICELAND/registrants")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 1
+    assert body["items"] == [
+        {
+            "registrant_id": seeded["registrant_id"],
+            "jurisdiction": "fara",
+            "registration_number": 5870,
+            "name": "Brownstein Hyatt Farber Schreck, LLP",
+            "business_name": None,
+            "city": "Washington",
+            "state": "DC",
+            "status": "active",
+            "registration_date": "2020-01-15",
+            "termination_date": None,
+        }
+    ]
+
+
+def test_country_registrants_status_filter_excludes_terminated(client, seeded):
+    resp = client.get("/api/countries/ICELAND/registrants?status=terminated")
+    assert resp.status_code == 200
+    assert resp.json()["items"] == []
+
+
+def test_country_registrants_empty_for_country_with_no_data(client, seeded):
+    resp = client.get("/api/countries/NARNIA/registrants")
+    assert resp.status_code == 200
+    assert resp.json() == {"items": [], "total": 0, "limit": 25, "offset": 0}
+
+
+def test_country_contacts(client, seeded):
+    resp = client.get("/api/countries/ICELAND/contacts")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 1
+    assert len(body["items"]) == 1
+    item = body["items"][0]
+    assert isinstance(item.pop("reportable_contact_id"), int)
+    assert item == {
+        "registrant_doc_id": seeded["registrant_doc_id"],
+        "registrant_id": seeded["registrant_id"],
+        "registrant_name": "Brownstein Hyatt Farber Schreck, LLP",
+        "contact_date": None,
+        "contact_name_raw": "Rachel Oglesby, Dept of Education",
+        "contact_method": "Email",
+        "purpose": "U.S.-Iceland relations",
+    }
+
+
+def test_country_contacts_empty_for_country_with_no_data(client, seeded):
+    resp = client.get("/api/countries/NARNIA/contacts")
+    assert resp.status_code == 200
+    assert resp.json() == {"items": [], "total": 0, "limit": 25, "offset": 0}
+
+
+def test_country_contributions(client, seeded):
+    resp = client.get("/api/countries/ICELAND/contributions")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 1
+    assert body["items"] == [
+        {
+            "registrant_doc_id": seeded["registrant_doc_id"],
+            "registrant_id": seeded["registrant_id"],
+            "registrant_name": "Brownstein Hyatt Farber Schreck, LLP",
+            "recipient_raw": "Friends of a Senator",
+            "amount": 2500.0,
+            "contribution_date": "2026-03-01",
+        }
+    ]
+
+
+def test_country_contributions_empty_for_country_with_no_data(client, seeded):
+    resp = client.get("/api/countries/NARNIA/contributions")
+    assert resp.status_code == 200
+    assert resp.json() == {"items": [], "total": 0, "limit": 25, "offset": 0}
+
+
 def test_country_topics(client, seeded):
     resp = client.get("/api/countries/ICELAND/topics")
     assert resp.status_code == 200

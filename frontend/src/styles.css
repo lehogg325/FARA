@@ -345,6 +345,21 @@ select {
   margin-bottom: 2px;
 }
 .record-field .field-value { font-family: var(--serif-body); font-size: 14px; color: var(--lunar); }
+.record-field-clickable {
+  display: block;
+  width: 100%;
+  background: none;
+  border: none;
+  border-radius: 3px;
+  padding: 6px 8px;
+  margin: -6px -8px;
+  text-align: left;
+  cursor: pointer;
+}
+.record-field-clickable:hover { background: var(--panel); }
+.record-field-clickable:hover .field-label { color: var(--orange); }
+.record-field-clickable.active { background: var(--panel); }
+.record-field-clickable.active .field-label { color: var(--orange); }
 
 /* ── Sections (foreign principals / short forms / documents lists) ──── */
 .section { margin-top: 34px; }

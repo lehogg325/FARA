@@ -249,6 +249,26 @@ export interface TopRecipient {
   sample_registrant_doc_ids: number[];
 }
 
+export interface CountryContact {
+  reportable_contact_id: number;
+  registrant_doc_id: number;
+  registrant_id: number;
+  registrant_name: string;
+  contact_date: string | null;
+  contact_name_raw: string;
+  contact_method: string | null;
+  purpose: string | null;
+}
+
+export interface CountryContribution {
+  registrant_doc_id: number;
+  registrant_id: number;
+  registrant_name: string;
+  recipient_raw: string | null;
+  amount: number | null;
+  contribution_date: string | null;
+}
+
 async function get<T>(url: string, signal?: AbortSignal): Promise<T> {
   const r = await fetch(url, { signal });
   if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
@@ -316,5 +336,11 @@ export const api = {
     get<TopContact[]>(`/api/countries/${encodeURIComponent(name)}/top-contacts${qs({ limit })}`),
   topRecipients: (name: string, limit = 25) =>
     get<TopRecipient[]>(`/api/countries/${encodeURIComponent(name)}/top-recipients${qs({ limit })}`),
+  countryRegistrants: (name: string, params: { status?: "active" | "terminated"; offset?: number; limit?: number } = {}) =>
+    get<Page<RegistrantSummary>>(`/api/countries/${encodeURIComponent(name)}/registrants${qs(params)}`),
+  countryContacts: (name: string, offset = 0, limit = 25) =>
+    get<Page<CountryContact>>(`/api/countries/${encodeURIComponent(name)}/contacts${qs({ offset, limit })}`),
+  countryContributions: (name: string, offset = 0, limit = 25) =>
+    get<Page<CountryContribution>>(`/api/countries/${encodeURIComponent(name)}/contributions${qs({ offset, limit })}`),
   topics: () => get<Topic[]>("/api/topics"),
 };

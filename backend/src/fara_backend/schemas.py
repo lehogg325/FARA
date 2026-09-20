@@ -241,6 +241,26 @@ class TopRecipient(BaseModel):
     sample_registrant_doc_ids: list[int]
 
 
+class CountryContact(BaseModel):
+    reportable_contact_id: int
+    registrant_doc_id: int
+    registrant_id: int
+    registrant_name: str
+    contact_date: date | None
+    contact_name_raw: str
+    contact_method: str | None
+    purpose: str | None
+
+
+class CountryContribution(BaseModel):
+    registrant_doc_id: int
+    registrant_id: int
+    registrant_name: str
+    recipient_raw: str | None
+    amount: float | None
+    contribution_date: date | None
+
+
 class DatasetStatus(BaseModel):
     dataset: str
     snapshot_date: date
