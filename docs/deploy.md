@@ -34,6 +34,34 @@ can't recur.
 below) now 307-redirects to it. Both work; use `fara-fai.vercel.app` going
 forward.
 
+**Follow-up (2026-09-20): the live app no longer connects as `postgres`.**
+Rotating the leaked password neutralized that specific leak, but it didn't fix
+the underlying exposure — the app had *always* connected as `postgres`
+(BYPASSRLS), so any future leak of that credential would again be a leaked
+superuser-equivalent, and migration `0009_enable_rls.sql`'s RLS policies were
+protecting nothing for the connection actually in use. Migration
+`0011_readonly_app_role.sql` adds `fara_app`, a NOLOGIN role with SELECT-only
+access (via its own RLS policies) to exactly the tables any backend router
+reads — confirmed via grep that no write endpoint exists anywhere in
+`backend/src/fara_backend/routers/`. Vercel's `DATABASE_URL` now points at
+`fara_app` (tested against every router live before cutting over); a leaked
+credential today can only ever read public data, nothing else.
+
+**The GitHub Actions `DATABASE_URL` secret intentionally stays on the
+`postgres` credential** — `ingest-bulk.yml`/`docs-and-extract.yml` write data
+and run schema migrations (DDL), neither of which `fara_app` can do by design.
+Only the read-only Vercel deployment uses the restricted role.
+
+Also added: a 10-second `statement_timeout` on every connection
+(`backend/src/fara_backend/db.py`), a backstop against a handful of slow/
+abusive concurrent requests exhausting the 5-connection pool — found while
+investigating whether an index could make `/api/foreign-principals`'s default
+unfiltered grouped listing (the most expensive query shape in the app,
+~300ms today) cheaper. It can't, in a way that changes Postgres's plan at
+today's scale (`jurisdiction` has only one value in use, so it isn't
+selective), so the index (`0010_fp_grouped_index.sql`) is a no-op today
+and the timeout is the actual mitigation.
+
 ## Status (as of 2026-09-02)
 
 **Vercel project imported and live** at `fara-ochre.vercel.app`. First real deploy
@@ -221,12 +249,13 @@ None of this can be scripted from here — it needs your accounts and API tokens
 The project, schema, and seed data are already live, and both the session pooler and
 Supabase Storage credentials are already GitHub Actions secrets.
 
-Optional hardening, skippable for now: Database → Roles → create a read-only role and
-`GRANT SELECT ON ALL TABLES IN SCHEMA public TO <role>;` (re-run after future migrations,
-or set a default-privilege grant so new tables inherit it), then use that role's
-connection string for the Vercel `DATABASE_URL` instead of the default role. The API is
-read-only by construction (no write endpoints exist), so this reduces blast radius but
-isn't a hard blocker.
+**Done (2026-09-20)**: this section used to describe the read-only role as optional
+hardening — it's now in place. `fara_app` (migration `0011_readonly_app_role.sql`)
+is the Vercel `DATABASE_URL`'s role; see the security-incident follow-up note above.
+Re-run the migration (or add a new one) after adding tables that need to be
+API-readable — `fara_app`'s grants aren't a default-privilege/schema-wide grant, so
+a new table needs an explicit `GRANT SELECT ... TO fara_app` + policy, same as any
+other table added to 0009's public-facing list.
 
 ### 2. Supabase Storage — done
 
@@ -246,15 +275,18 @@ set: `DATABASE_URL`, `ANTHROPIC_API_KEY`, `FARA_STORAGE_BUCKET`,
    supplies the build command, output directory, function config, and routing; no
    framework preset needed (same pattern as `github.com/lehogg325/LDA`).
 2. Project → Settings → Environment Variables: `DATABASE_URL` = the transaction-pooler
-   connection string, shape:
+   connection string, using the `fara_app` role (see the security-incident
+   follow-up note above — NOT the `postgres` role, which GitHub Actions'
+   `DATABASE_URL` secret uses instead since it needs write/DDL access), shape:
    ```
-   postgresql://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres
+   postgresql://fara_app.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres
    ```
    Get the real value from Supabase → Project Settings → Database → Connection
-   string (Transaction pooler), never commit it here. **A real password was
-   committed to this file in an earlier revision — see the security incident
-   note at the top of this document; it must be rotated if that hasn't happened
-   yet.**
+   string (Transaction pooler), swapping the username's role to `fara_app`, never
+   commit it here. **A real `postgres`-role password was committed to this file in
+   an earlier revision — see the security incident note at the top of this
+   document; it must be rotated if that hasn't happened yet (irrelevant to
+   `fara_app`'s own password, which is unrelated and was never committed anywhere).**
 3. Deploy. `/` serves the frontend; `/api/meta` is a quick health check.
 
 ## Local dev vs. production
