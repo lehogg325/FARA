@@ -1,0 +1,21 @@
+# Vercel's CLI does not reliably fall back to .gitignore for non-prebuilt
+# deploys -- a `vercel --prod` run once tried to upload the entire working
+# directory including the 22GB local data/ dir (locally downloaded PDFs from
+# testing the ingest pipeline, docs/deploy.md's LocalArchive), taking the
+# upload from a normal few-hundred-KB payload to 15.7GB. Explicit ignore list
+# so this can never happen again regardless of CLI ignore-resolution quirks.
+
+.venv/
+node_modules/
+frontend/node_modules/
+data/
+.git/
+.pytest_cache/
+__pycache__/
+*.pyc
+*.egg-info/
+.env
+.env*
+.DS_Store
+*.log
+.claude/

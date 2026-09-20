@@ -1,6 +1,6 @@
 # Deployment
 
-## Security incident (2026-09-20): production DB password committed in plaintext
+## Security incident (2026-09-20): production DB password committed in plaintext — RESOLVED
 
 A real Supabase `postgres`-role password was committed to this file (the step-4
 Vercel setup instructions below) and pushed to `github.com/lehogg325/FARA`. That
@@ -8,15 +8,31 @@ role has `BYPASSRLS`, so this credential granted full read/write/delete on every
 table regardless of the RLS policies added in migration `0009_enable_rls.sql` —
 unrelated to the app's intentional no-auth-by-design read API.
 
-**This must be rotated via the Supabase dashboard (Project Settings → Database →
-Reset database password) — it cannot be done via a normal SQL connection** (`ALTER
-ROLE postgres` fails with "Only superusers can alter privileged roles" even from
-the `postgres` role itself; confirmed live). After rotating, update the new
-password everywhere the old one was used: Vercel's `DATABASE_URL` env var (then
-redeploy — env var changes don't apply to already-built functions), the
-`DATABASE_URL` GitHub Actions secret, and local `.env`/`.env.local`. Redacting this
-file (done, see step 2 below) does not remove the leaked value from git history —
-rotation, not redaction, is what actually neutralizes it.
+**Resolved same-day**: password rotated via the Supabase dashboard (could not be
+done via a normal SQL connection — `ALTER ROLE postgres` fails with "Only
+superusers can alter privileged roles" even from the `postgres` role itself;
+confirmed live — this needs dashboard/Management-API access). Updated everywhere
+the old password was used: Vercel's `DATABASE_URL` env var (removed + re-added,
+then redeployed — env var changes don't apply to already-built functions), the
+`DATABASE_URL` GitHub Actions secret (`gh secret set`), and local `.env`. Verified
+live afterward (`/api/meta`, search, a country graph all returned real data on the
+new credential). Redacting this file (done, step 2 below) never removed the
+leaked value from git history on its own — rotation is what actually neutralized
+it; history-scrubbing (`git filter-repo`/BFG + force-push) remains a
+lower-urgency optional follow-up now that the credential itself is dead.
+
+Also found and fixed while resolving this: `vercel --prod` run from the repo
+root once tried to upload the entire working directory including a 22GB local
+`data/` dir (locally downloaded PDFs from testing the ingest pipeline) — a
+15.7GB deploy payload instead of the normal ~16MB, because Vercel's CLI doesn't
+reliably fall back to `.gitignore` for non-prebuilt deploys the way `git` does.
+Added a `.vercelignore` (mirrors `.gitignore`'s exclusions explicitly) so this
+can't recur.
+
+**Public URL note**: the project's public alias is now `fara-fai.vercel.app` —
+`fara-ochre.vercel.app` (referenced throughout the historical status entries
+below) now 307-redirects to it. Both work; use `fara-fai.vercel.app` going
+forward.
 
 ## Status (as of 2026-09-02)
 
