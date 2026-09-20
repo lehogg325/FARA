@@ -1,5 +1,23 @@
 # Deployment
 
+## Security incident (2026-09-20): production DB password committed in plaintext
+
+A real Supabase `postgres`-role password was committed to this file (the step-4
+Vercel setup instructions below) and pushed to `github.com/lehogg325/FARA`. That
+role has `BYPASSRLS`, so this credential granted full read/write/delete on every
+table regardless of the RLS policies added in migration `0009_enable_rls.sql` —
+unrelated to the app's intentional no-auth-by-design read API.
+
+**This must be rotated via the Supabase dashboard (Project Settings → Database →
+Reset database password) — it cannot be done via a normal SQL connection** (`ALTER
+ROLE postgres` fails with "Only superusers can alter privileged roles" even from
+the `postgres` role itself; confirmed live). After rotating, update the new
+password everywhere the old one was used: Vercel's `DATABASE_URL` env var (then
+redeploy — env var changes don't apply to already-built functions), the
+`DATABASE_URL` GitHub Actions secret, and local `.env`/`.env.local`. Redacting this
+file (done, see step 2 below) does not remove the leaked value from git history —
+rotation, not redaction, is what actually neutralizes it.
+
 ## Status (as of 2026-09-02)
 
 **Vercel project imported and live** at `fara-ochre.vercel.app`. First real deploy
@@ -212,10 +230,15 @@ set: `DATABASE_URL`, `ANTHROPIC_API_KEY`, `FARA_STORAGE_BUCKET`,
    supplies the build command, output directory, function config, and routing; no
    framework preset needed (same pattern as `github.com/lehogg325/LDA`).
 2. Project → Settings → Environment Variables: `DATABASE_URL` = the transaction-pooler
-   string (verified working):
+   connection string, shape:
    ```
-   postgresql://postgres.jpntfyaqoawdrlrqtavd:0xkzMsQRuoqJmFRj@aws-0-us-west-2.pooler.supabase.com:6543/postgres
+   postgresql://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres
    ```
+   Get the real value from Supabase → Project Settings → Database → Connection
+   string (Transaction pooler), never commit it here. **A real password was
+   committed to this file in an earlier revision — see the security incident
+   note at the top of this document; it must be rotated if that hasn't happened
+   yet.**
 3. Deploy. `/` serves the frontend; `/api/meta` is a quick health check.
 
 ## Local dev vs. production
