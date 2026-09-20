@@ -34,7 +34,7 @@ def list_registrants(
     state: str | None = None,
     q: str | None = None,
     limit: int = Query(25, ge=1, le=100),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=100_000),
     conn: psycopg.Connection = Depends(get_db),
 ) -> Page[RegistrantSummary]:
     where = ["jurisdiction = %(jurisdiction)s"]
@@ -102,7 +102,7 @@ def get_registrant_foreign_principals(
     registrant_id: int,
     jurisdiction: str = Query("fara"),
     limit: int = Query(25, ge=1, le=100),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=100_000),
     conn: psycopg.Connection = Depends(get_db),
 ) -> Page[ForeignPrincipal]:
     _get_registrant_or_404(conn, jurisdiction, registrant_id)
@@ -124,7 +124,7 @@ def get_registrant_short_forms(
     registrant_id: int,
     jurisdiction: str = Query("fara"),
     limit: int = Query(25, ge=1, le=100),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=100_000),
     conn: psycopg.Connection = Depends(get_db),
 ) -> Page[ShortFormRegistrant]:
     _get_registrant_or_404(conn, jurisdiction, registrant_id)
@@ -144,7 +144,7 @@ def get_registrant_documents(
     registrant_id: int,
     jurisdiction: str = Query("fara"),
     limit: int = Query(25, ge=1, le=100),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=100_000),
     conn: psycopg.Connection = Depends(get_db),
 ) -> Page[RegistrantDoc]:
     _get_registrant_or_404(conn, jurisdiction, registrant_id)

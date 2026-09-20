@@ -45,7 +45,7 @@ def list_foreign_principals(
     sort: str = Query("registration_date_desc", pattern="^(registration_date_desc|name_asc|country_asc)$"),
     group_by_name: bool = Query(True),
     limit: int = Query(25, ge=1, le=100),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=100_000),
     conn: psycopg.Connection = Depends(get_db),
 ) -> Page[ForeignPrincipal] | Page[ForeignPrincipalGrouped]:
     where = ["fp.jurisdiction = %(jurisdiction)s"]

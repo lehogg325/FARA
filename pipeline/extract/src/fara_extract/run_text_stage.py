@@ -120,6 +120,11 @@ def run_text_stage(
             pdf_bytes = ingest_archive.read_bytes(archive_key)
             result = extract_pdf_text(pdf_bytes)
         except Exception as e:
+            # A DB-level failure (constraint violation, encoding issue, etc.) aborts
+            # the transaction -- roll back before the record_run() INSERT below, or that
+            # write itself raises InFailedSqlTransaction and crashes the whole batch
+            # instead of just this one document.
+            conn.rollback()
             record_run(conn, registrant_doc_id, STAGE, EXTRACTOR_VERSION, "failed", error_message=str(e))
             conn.commit()
             failed += 1

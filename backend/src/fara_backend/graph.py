@@ -149,6 +149,7 @@ def build_registrant_expansion(conn: psycopg.Connection, registrant_id: int) -> 
         FROM reportable_contacts rc
         JOIN registrant_docs rd ON rd.registrant_doc_id = rc.registrant_doc_id
         WHERE rd.registrant_id = %s
+        ORDER BY rc.contact_date DESC NULLS LAST, rc.reportable_contact_id
         LIMIT %s
         """,
         (registrant_id, EXPANSION_CAP),
@@ -159,6 +160,7 @@ def build_registrant_expansion(conn: psycopg.Connection, registrant_id: int) -> 
         FROM document_extracted_fields def
         JOIN registrant_docs rd ON rd.registrant_doc_id = def.registrant_doc_id
         WHERE rd.registrant_id = %s AND def.field_key LIKE 'political_contribution[%%'
+        ORDER BY def.field_value_date DESC NULLS LAST, def.document_extracted_field_id
         LIMIT %s
         """,
         (registrant_id, EXPANSION_CAP),
@@ -199,7 +201,8 @@ def build_registrant_expansion(conn: psycopg.Connection, registrant_id: int) -> 
 def top_contacts(conn: psycopg.Connection, jurisdiction: str, country_name: str, limit: int) -> list[TopContact]:
     rows = conn.execute(
         f"""
-        SELECT (array_agg(contact_name_raw))[1] AS contact_name_raw, count(*) AS occurrence_count,
+        SELECT (array_agg(contact_name_raw ORDER BY registrant_doc_id))[1] AS contact_name_raw,
+               count(*) AS occurrence_count,
                (array_agg(DISTINCT registrant_doc_id))[1:5] AS sample_registrant_doc_ids
         FROM (
             SELECT rc.registrant_doc_id, rc.contact_name_raw, {NORM_SQL.format(col='rc.contact_name_raw')} AS norm_name
@@ -220,7 +223,8 @@ def top_contacts(conn: psycopg.Connection, jurisdiction: str, country_name: str,
 def top_recipients(conn: psycopg.Connection, jurisdiction: str, country_name: str, limit: int) -> list[TopRecipient]:
     rows = conn.execute(
         f"""
-        SELECT (array_agg(field_value_text))[1] AS recipient_raw, count(*) AS occurrence_count,
+        SELECT (array_agg(field_value_text ORDER BY registrant_doc_id))[1] AS recipient_raw,
+               count(*) AS occurrence_count,
                sum(field_value_numeric) AS total_amount,
                (array_agg(DISTINCT registrant_doc_id))[1:5] AS sample_registrant_doc_ids
         FROM (

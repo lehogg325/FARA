@@ -101,6 +101,11 @@ def run_fields_llm_stage(
             # identically, so stop the batch rather than burn through it.
             raise
         except Exception as e:
+            # A DB-level failure (constraint violation, encoding issue, etc.) aborts
+            # the transaction -- roll back before the record_run() INSERT below, or that
+            # write itself raises InFailedSqlTransaction and crashes the whole batch
+            # instead of just this one document.
+            conn.rollback()
             record_run(conn, registrant_doc_id, STAGE, version, "failed", error_message=str(e))
             conn.commit()
             failed += 1

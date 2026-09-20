@@ -47,6 +47,14 @@ def test_search_no_match(client, seeded):
     assert resp.json() == []
 
 
+def test_search_rejects_invalid_type(client, seeded):
+    # A `type` outside _VALID_TYPES used to fall through to `by_type[type]` with
+    # a key that was never populated -- an unhandled KeyError/500. Should be a
+    # clean 422 from FastAPI's own Query validation now.
+    resp = client.get("/api/search", params={"q": "iceland", "type": "bogus"})
+    assert resp.status_code == 422
+
+
 def test_search_groups_registrants_by_normalized_name(client, conn, seeded):
     # A second registration under the same name (whitespace-variant), distinct
     # registration_number/status — mirrors the real "Ballard Partners" /

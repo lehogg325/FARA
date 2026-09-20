@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date
+
 import psycopg
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -25,10 +27,10 @@ def list_documents(
     document_type: str | None = None,
     registrant_id: int | None = None,
     country: str | None = None,
-    date_from: str | None = None,
-    date_to: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
     limit: int = Query(25, ge=1, le=100),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=100_000),
     conn: psycopg.Connection = Depends(get_db),
 ) -> Page[RegistrantDoc]:
     where = ["jurisdiction = %(jurisdiction)s"]
@@ -66,7 +68,7 @@ def search_documents(
     document_type: str | None = None,
     registrant_id: int | None = None,
     limit: int = Query(25, ge=1, le=100),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=100_000),
     conn: psycopg.Connection = Depends(get_db),
 ) -> Page[DocumentSearchResult]:
     where = ["rd.jurisdiction = %(jurisdiction)s", "dt.text_search @@ plainto_tsquery('english', %(q)s)"]

@@ -106,7 +106,7 @@ def get_country_registrants(
     jurisdiction: str = Query("fara"),
     status: str | None = Query(None, pattern="^(active|terminated)$"),
     limit: int = Query(25, ge=1, le=100),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=100_000),
     conn: psycopg.Connection = Depends(get_db),
 ) -> Page[RegistrantSummary]:
     where = ["fp.jurisdiction = %(j)s", "fp.country_raw = %(country)s"]
@@ -144,7 +144,7 @@ def get_country_contacts(
     country_name: str,
     jurisdiction: str = Query("fara"),
     limit: int = Query(25, ge=1, le=100),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=100_000),
     conn: psycopg.Connection = Depends(get_db),
 ) -> Page[CountryContact]:
     params = {"j": jurisdiction, "country": country_name, "limit": limit, "offset": offset}
@@ -182,7 +182,7 @@ def get_country_contributions(
     country_name: str,
     jurisdiction: str = Query("fara"),
     limit: int = Query(25, ge=1, le=100),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=100_000),
     conn: psycopg.Connection = Depends(get_db),
 ) -> Page[CountryContribution]:
     params = {"j": jurisdiction, "country": country_name, "limit": limit, "offset": offset}

@@ -68,7 +68,7 @@ _SUBQUERIES = {
 @router.get("/search", response_model=list[SearchResult])
 def search(
     q: str,
-    type: str | None = Query(None, alias="type"),
+    type: str | None = Query(None, alias="type", pattern="^(registrant|foreign_principal|short_form_registrant|country)$"),
     jurisdiction: str = Query("fara"),
     limit: int = Query(10, ge=1, le=50),
     conn: psycopg.Connection = Depends(get_db),

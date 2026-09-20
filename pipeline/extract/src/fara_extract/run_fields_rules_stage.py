@@ -135,6 +135,11 @@ def run_fields_rules_stage(
                         )
                         fields_written += 1
         except Exception as e:
+            # A DB-level failure (constraint violation, encoding issue, etc.) aborts
+            # the transaction -- roll back before the record_run() INSERT below, or that
+            # write itself raises InFailedSqlTransaction and crashes the whole batch
+            # instead of just this one document.
+            conn.rollback()
             record_run(conn, registrant_doc_id, STAGE, RULES_EXTRACTOR_VERSION, "failed", error_message=str(e))
             conn.commit()
             failed += 1
