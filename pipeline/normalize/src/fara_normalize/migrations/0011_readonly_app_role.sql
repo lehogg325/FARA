@@ -1,0 +1,56 @@
+-- Defense-in-depth for the credential-leak incident (docs/deploy.md): the app
+-- has always connected as `postgres`, a role with BYPASSRLS -- so 0009's RLS
+-- policies protect nothing for the connection actually used, and a leaked
+-- credential was (and, until this migration's role is actually adopted, still
+-- is) a leaked superuser-equivalent. This creates a NOLOGIN role holding
+-- exactly the grants the app needs -- SELECT on the public-facing tables,
+-- nothing else, confirmed against every router in backend/src/fara_backend
+-- that there is no INSERT/UPDATE/DELETE endpoint anywhere -- plus its own RLS
+-- policies, separate from 0009's anon/authenticated ones (those exist for
+-- Supabase's unused auto-provisioned PostgREST API; this role is for this
+-- app's own connection, a different concept even though the grants happen to
+-- be identical).
+--
+-- No password is set here (or anywhere in git) -- LOGIN and a password are
+-- granted separately, directly against each environment that needs this role
+-- to actually connect as it, the same way the one time this mattered (the
+-- incident) was handled: never in a file that gets committed.
+--
+-- NOLOGIN roles and CREATE POLICY both work identically against local/CI
+-- Postgres (table owner) and Supabase (postgres role has BYPASSRLS there) --
+-- this migration is a harmless no-op locally beyond creating an unused role,
+-- since local dev/CI keep connecting as their own owner role.
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'fara_app') THEN
+        CREATE ROLE fara_app NOLOGIN;
+    END IF;
+END $$;
+
+GRANT USAGE ON SCHEMA public TO fara_app;
+GRANT SELECT ON
+    registrants, foreign_principals, registrant_docs, short_form_registrants,
+    document_text, document_extracted_fields, reportable_contacts, document_topics,
+    countries, document_types, topics, jurisdictions
+TO fara_app;
+
+DO $$
+DECLARE
+    t text;
+BEGIN
+    FOREACH t IN ARRAY ARRAY[
+        'registrants', 'foreign_principals', 'registrant_docs', 'short_form_registrants',
+        'document_text', 'document_extracted_fields', 'reportable_contacts', 'document_topics',
+        'countries', 'document_types', 'topics', 'jurisdictions'
+    ]
+    LOOP
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_policies WHERE tablename = t AND policyname = 'fara_app read access'
+        ) THEN
+            EXECUTE format(
+                'CREATE POLICY "fara_app read access" ON %I FOR SELECT TO fara_app USING (true)', t
+            );
+        END IF;
+    END LOOP;
+END $$;

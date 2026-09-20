@@ -46,4 +46,19 @@ def get_pool() -> ConnectionPool:
 
 def get_db() -> Iterator[psycopg.Connection]:
     with get_pool().connection() as conn:
+        # A per-connect `options=-c statement_timeout=...` doesn't reach the
+        # server through Supabase's transaction-mode pooler (verified live —
+        # it silently keeps its own default instead), but `SET` issued as the
+        # first statement of each request's own transaction does, the same
+        # way prepare_threshold=None above works around that pooler's other
+        # session-scoping limit. A backstop, not a routine limit (matching
+        # graph.py's BACKBONE_CAP/EXPANSION_CAP pattern) — every real query
+        # here finishes in well under a second (the worst measured, the
+        # unfiltered /api/foreign-principals grouped listing, is ~300ms
+        # against today's data), so 10s only ever fires for something
+        # pathological. With only 5 connections in this pool, a handful of
+        # slow/abusive concurrent requests to a public, unauthenticated
+        # endpoint could otherwise exhaust it and start queuing or timing out
+        # every other request to the site.
+        conn.execute("SET statement_timeout = '10s'")
         yield conn
