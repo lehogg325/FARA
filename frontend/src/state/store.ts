@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { pathToView, viewToPath } from "./url";
 
 export type View =
   | { kind: "home" }
@@ -15,18 +16,30 @@ export type View =
 
 interface Store {
   view: View;
-  history: View[];
   navigate: (v: View) => void;
   back: () => void;
 }
 
-export const useStore = create<Store>((set, get) => ({
-  view: { kind: "home" },
-  history: [],
-  navigate: (v) => set((s) => ({ view: v, history: [...s.history, s.view] })),
-  back: () => {
-    const h = [...get().history];
-    const prev = h.pop();
-    set({ view: prev ?? { kind: "home" }, history: h });
+// The browser's own session history is the single source of truth for
+// "back" — no separate in-memory stack to keep in sync with it. navigate()
+// pushes a real URL per view (mirrored back by pathToView/viewToPath), so
+// the native back/forward buttons retrace exactly what the user clicked
+// through, and a refresh or shared link lands on the right view instead of
+// always resetting to home.
+export const useStore = create<Store>((set) => ({
+  view: pathToView(window.location.pathname, window.location.search),
+  navigate: (v) => {
+    const path = viewToPath(v);
+    if (window.location.pathname + window.location.search !== path) {
+      window.history.pushState(null, "", path);
+    }
+    set({ view: v });
   },
+  back: () => window.history.back(),
 }));
+
+// history.back()/forward() are asynchronous — the browser fires popstate once
+// the navigation actually happens, which is when `view` should update.
+window.addEventListener("popstate", () => {
+  useStore.setState({ view: pathToView(window.location.pathname, window.location.search) });
+});

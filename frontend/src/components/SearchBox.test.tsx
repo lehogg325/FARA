@@ -31,7 +31,8 @@ const COUNTRY_HIT: SearchResult = {
 
 beforeEach(() => {
   vi.mocked(api.search).mockReset();
-  useStore.setState({ view: { kind: "home" }, history: [] });
+  window.history.replaceState(null, "", "/");
+  useStore.setState({ view: { kind: "home" } });
 });
 
 describe("SearchBox", () => {
