@@ -79,6 +79,16 @@ def test_country_registrants_empty_for_country_with_no_data(client, seeded):
     assert resp.json() == {"items": [], "total": 0, "limit": 25, "offset": 0}
 
 
+def test_country_registrants_q_filter(client, seeded):
+    resp = client.get("/api/countries/ICELAND/registrants", params={"q": "brownstein"})
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 1
+
+    resp = client.get("/api/countries/ICELAND/registrants", params={"q": "no-such-name"})
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 0
+
+
 def test_country_contacts(client, seeded):
     resp = client.get("/api/countries/ICELAND/contacts")
     assert resp.status_code == 200
@@ -104,6 +114,16 @@ def test_country_contacts_empty_for_country_with_no_data(client, seeded):
     assert resp.json() == {"items": [], "total": 0, "limit": 25, "offset": 0}
 
 
+def test_country_contacts_q_filter(client, seeded):
+    resp = client.get("/api/countries/ICELAND/contacts", params={"q": "Oglesby"})
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 1
+
+    resp = client.get("/api/countries/ICELAND/contacts", params={"q": "no-such-name"})
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 0
+
+
 def test_country_contributions(client, seeded):
     resp = client.get("/api/countries/ICELAND/contributions")
     assert resp.status_code == 200
@@ -125,6 +145,16 @@ def test_country_contributions_empty_for_country_with_no_data(client, seeded):
     resp = client.get("/api/countries/NARNIA/contributions")
     assert resp.status_code == 200
     assert resp.json() == {"items": [], "total": 0, "limit": 25, "offset": 0}
+
+
+def test_country_contributions_q_filter(client, seeded):
+    resp = client.get("/api/countries/ICELAND/contributions", params={"q": "Friends of a Senator"})
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 1
+
+    resp = client.get("/api/countries/ICELAND/contributions", params={"q": "no-such-recipient"})
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 0
 
 
 def test_country_topics(client, seeded):

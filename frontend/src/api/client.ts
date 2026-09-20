@@ -364,12 +364,19 @@ export const api = {
     get<TopRecipient[]>(`/api/countries/${encodeURIComponent(name)}/top-recipients${qs({ limit })}`, signal),
   countryRegistrants: (
     name: string,
-    params: { status?: "active" | "terminated"; offset?: number; limit?: number } = {},
+    params: { status?: "active" | "terminated"; q?: string; offset?: number; limit?: number } = {},
     signal?: AbortSignal,
   ) => get<Page<RegistrantSummary>>(`/api/countries/${encodeURIComponent(name)}/registrants${qs(params)}`, signal),
-  countryContacts: (name: string, offset = 0, limit = 25, signal?: AbortSignal) =>
-    get<Page<CountryContact>>(`/api/countries/${encodeURIComponent(name)}/contacts${qs({ offset, limit })}`, signal),
-  countryContributions: (name: string, offset = 0, limit = 25, signal?: AbortSignal) =>
-    get<Page<CountryContribution>>(`/api/countries/${encodeURIComponent(name)}/contributions${qs({ offset, limit })}`, signal),
+  countryContacts: (
+    name: string,
+    params: { q?: string; offset?: number; limit?: number } = {},
+    signal?: AbortSignal,
+  ) => get<Page<CountryContact>>(`/api/countries/${encodeURIComponent(name)}/contacts${qs(params)}`, signal),
+  countryContributions: (
+    name: string,
+    params: { q?: string; offset?: number; limit?: number } = {},
+    signal?: AbortSignal,
+  ) =>
+    get<Page<CountryContribution>>(`/api/countries/${encodeURIComponent(name)}/contributions${qs(params)}`, signal),
   topics: (signal?: AbortSignal) => get<Topic[]>("/api/topics", signal),
 };

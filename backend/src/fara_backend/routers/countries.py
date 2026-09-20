@@ -105,6 +105,7 @@ def get_country_registrants(
     country_name: str,
     jurisdiction: str = Query("fara"),
     status: str | None = Query(None, pattern="^(active|terminated)$"),
+    q: str | None = None,
     limit: int = Query(25, ge=1, le=100),
     offset: int = Query(0, ge=0, le=100_000),
     conn: psycopg.Connection = Depends(get_db),
@@ -114,6 +115,9 @@ def get_country_registrants(
     if status:
         where.append("r.status = %(status)s")
         params["status"] = status
+    if q:
+        where.append("r.name ILIKE %(q)s")
+        params["q"] = f"%{q}%"
     where_sql = " AND ".join(where)
 
     # DISTINCT r.* matches get_country()'s count(DISTINCT r.registrant_id) above —
@@ -143,32 +147,39 @@ def get_country_registrants(
 def get_country_contacts(
     country_name: str,
     jurisdiction: str = Query("fara"),
+    q: str | None = None,
     limit: int = Query(25, ge=1, le=100),
     offset: int = Query(0, ge=0, le=100_000),
     conn: psycopg.Connection = Depends(get_db),
 ) -> Page[CountryContact]:
-    params = {"j": jurisdiction, "country": country_name, "limit": limit, "offset": offset}
-    # Same join shape as get_country()'s contact_row above, so this total always
-    # matches the number that was clicked.
+    where = ["fp.jurisdiction = %(j)s", "fp.country_raw = %(country)s"]
+    params: dict = {"j": jurisdiction, "country": country_name, "limit": limit, "offset": offset}
+    if q:
+        where.append("rc.contact_name_raw ILIKE %(q)s")
+        params["q"] = f"%{q}%"
+    where_sql = " AND ".join(where)
+
+    # Same join shape as get_country()'s contact_row above (plus the q filter,
+    # when present), so this total always matches the number that was clicked.
     total = conn.execute(
-        """
+        f"""
         SELECT count(*) AS n
         FROM reportable_contacts rc
         JOIN registrant_docs rd ON rd.registrant_doc_id = rc.registrant_doc_id
         JOIN foreign_principals fp ON fp.registrant_id = rd.registrant_id
-        WHERE fp.jurisdiction = %(j)s AND fp.country_raw = %(country)s
+        WHERE {where_sql}
         """,
         params,
     ).fetchone()["n"]
     rows = conn.execute(
-        """
+        f"""
         SELECT rc.reportable_contact_id, rc.registrant_doc_id, rd.registrant_id, r.name AS registrant_name,
                rc.contact_date, rc.contact_name_raw, rc.contact_method, rc.purpose
         FROM reportable_contacts rc
         JOIN registrant_docs rd ON rd.registrant_doc_id = rc.registrant_doc_id
         JOIN foreign_principals fp ON fp.registrant_id = rd.registrant_id
         JOIN registrants r ON r.registrant_id = rd.registrant_id
-        WHERE fp.jurisdiction = %(j)s AND fp.country_raw = %(country)s
+        WHERE {where_sql}
         ORDER BY rc.contact_date DESC NULLS LAST
         LIMIT %(limit)s OFFSET %(offset)s
         """,
@@ -181,28 +192,38 @@ def get_country_contacts(
 def get_country_contributions(
     country_name: str,
     jurisdiction: str = Query("fara"),
+    q: str | None = None,
     limit: int = Query(25, ge=1, le=100),
     offset: int = Query(0, ge=0, le=100_000),
     conn: psycopg.Connection = Depends(get_db),
 ) -> Page[CountryContribution]:
-    params = {"j": jurisdiction, "country": country_name, "limit": limit, "offset": offset}
-    # Same join shape as get_country()'s contrib_row above, so this total always
-    # matches the number that was clicked. Each political_contribution[N] field_key
-    # is already one full contribution record (text=recipient, numeric=amount,
-    # date=date) — confirmed live, not split across multiple field_keys — so this
-    # is a plain SELECT, not a re-aggregation.
+    where = [
+        "fp.jurisdiction = %(j)s", "fp.country_raw = %(country)s", "def.field_key LIKE 'political_contribution[%%'",
+    ]
+    params: dict = {"j": jurisdiction, "country": country_name, "limit": limit, "offset": offset}
+    if q:
+        where.append("def.field_value_text ILIKE %(q)s")
+        params["q"] = f"%{q}%"
+    where_sql = " AND ".join(where)
+
+    # Same join shape as get_country()'s contrib_row above (plus the q filter,
+    # when present), so this total always matches the number that was clicked.
+    # Each political_contribution[N] field_key is already one full contribution
+    # record (text=recipient, numeric=amount, date=date) — confirmed live, not
+    # split across multiple field_keys — so this is a plain SELECT, not a
+    # re-aggregation.
     total = conn.execute(
-        """
+        f"""
         SELECT count(*) AS n
         FROM document_extracted_fields def
         JOIN registrant_docs rd ON rd.registrant_doc_id = def.registrant_doc_id
         JOIN foreign_principals fp ON fp.registrant_id = rd.registrant_id
-        WHERE fp.jurisdiction = %(j)s AND fp.country_raw = %(country)s AND def.field_key LIKE 'political_contribution[%%'
+        WHERE {where_sql}
         """,
         params,
     ).fetchone()["n"]
     rows = conn.execute(
-        """
+        f"""
         SELECT rd.registrant_doc_id, rd.registrant_id, r.name AS registrant_name,
                def.field_value_text AS recipient_raw, def.field_value_numeric AS amount,
                def.field_value_date AS contribution_date
@@ -210,7 +231,7 @@ def get_country_contributions(
         JOIN registrant_docs rd ON rd.registrant_doc_id = def.registrant_doc_id
         JOIN foreign_principals fp ON fp.registrant_id = rd.registrant_id
         JOIN registrants r ON r.registrant_id = rd.registrant_id
-        WHERE fp.jurisdiction = %(j)s AND fp.country_raw = %(country)s AND def.field_key LIKE 'political_contribution[%%'
+        WHERE {where_sql}
         ORDER BY def.field_value_date DESC NULLS LAST
         LIMIT %(limit)s OFFSET %(offset)s
         """,

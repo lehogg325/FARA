@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { lazy, Suspense, useRef, useState } from "react";
+import { lazy, Suspense, useRef, useState, type CSSProperties } from "react";
 import { api } from "../api/client";
 import type { GraphViewHandle } from "./GraphView";
 import { Pagination } from "./Pagination";
@@ -7,6 +7,7 @@ import { Tabs } from "./Tabs";
 import { TopEntityList } from "./TopEntityList";
 import { useStore } from "../state/store";
 import { formatCurrency, formatDate } from "../utils/format";
+import { useDebouncedSearch } from "../hooks/useDebouncedSearch";
 
 // sigma/graphology (statically imported inside GraphView.tsx) are only used
 // here, on a country's Network tab — lazy-loading keeps them out of the bundle
@@ -15,6 +16,12 @@ const GraphView = lazy(() => import("./GraphView").then((m) => ({ default: m.Gra
 
 const DRILLDOWN_PAGE_SIZE = 25;
 
+const SEARCH_INPUT_STYLE: CSSProperties = {
+  width: "100%", maxWidth: 320, marginBottom: 12, padding: "8px 12px",
+  fontFamily: "var(--mono)", fontSize: 13, color: "var(--lunar)",
+  background: "var(--panel)", border: "1px solid var(--rule)", borderRadius: 4,
+};
+
 function fmtMoney(n: number): string {
   return formatCurrency(n, { maximumFractionDigits: 0 })!;
 }
@@ -22,27 +29,39 @@ function fmtMoney(n: number): string {
 function RegistrantsDrilldown({ name }: { name: string }) {
   const navigate = useStore((s) => s.navigate);
   const [offset, setOffset] = useState(0);
+  const [qInput, setQInput, q] = useDebouncedSearch(() => setOffset(0));
   const results = useQuery({
-    queryKey: ["country-registrants", name, offset],
-    queryFn: ({ signal }) => api.countryRegistrants(name, { status: "active", offset, limit: DRILLDOWN_PAGE_SIZE }, signal),
+    queryKey: ["country-registrants", name, q, offset],
+    queryFn: ({ signal }) =>
+      api.countryRegistrants(name, { status: "active", q, offset, limit: DRILLDOWN_PAGE_SIZE }, signal),
   });
-  if (results.isLoading) return <div className="loading">Loading…</div>;
-  if (results.isError) return <div className="error-state">Could not load results.</div>;
-  if (!results.data) return null;
   return (
     <div>
-      <ul className="record-list">
-        {results.data.items.map((r) => (
-          <li key={r.registrant_id}>
-            <button className="row-btn" onClick={() => navigate({ kind: "registrant", id: r.registrant_id })}>
-              <span>{r.name}</span>
-              <span className="row-meta">{[r.city, r.state].filter(Boolean).join(", ") || "—"}</span>
-            </button>
-          </li>
-        ))}
-        {results.data.items.length === 0 && <li className="loading">No matches.</li>}
-      </ul>
-      <Pagination total={results.data.total} offset={offset} setOffset={setOffset} pageSize={DRILLDOWN_PAGE_SIZE} />
+      <input
+        type="text"
+        value={qInput}
+        onChange={(e) => setQInput(e.target.value)}
+        placeholder="Search registrants…"
+        style={SEARCH_INPUT_STYLE}
+      />
+      {results.isLoading && <div className="loading">Loading…</div>}
+      {results.isError && <div className="error-state">Could not load results.</div>}
+      {results.data && (
+        <>
+          <ul className="record-list">
+            {results.data.items.map((r) => (
+              <li key={r.registrant_id}>
+                <button className="row-btn" onClick={() => navigate({ kind: "registrant", id: r.registrant_id })}>
+                  <span>{r.name}</span>
+                  <span className="row-meta">{[r.city, r.state].filter(Boolean).join(", ") || "—"}</span>
+                </button>
+              </li>
+            ))}
+            {results.data.items.length === 0 && <li className="loading">No matches.</li>}
+          </ul>
+          <Pagination total={results.data.total} offset={offset} setOffset={setOffset} pageSize={DRILLDOWN_PAGE_SIZE} />
+        </>
+      )}
     </div>
   );
 }
@@ -50,31 +69,42 @@ function RegistrantsDrilldown({ name }: { name: string }) {
 function ForeignPrincipalsDrilldown({ name }: { name: string }) {
   const navigate = useStore((s) => s.navigate);
   const [offset, setOffset] = useState(0);
+  const [qInput, setQInput, q] = useDebouncedSearch(() => setOffset(0));
   const results = useQuery({
-    queryKey: ["country-foreign-principals", name, offset],
+    queryKey: ["country-foreign-principals", name, q, offset],
     queryFn: ({ signal }) =>
-      api.searchForeignPrincipals({ country: name, group_by_name: false, offset, limit: DRILLDOWN_PAGE_SIZE }, signal),
+      api.searchForeignPrincipals({ country: name, group_by_name: false, q, offset, limit: DRILLDOWN_PAGE_SIZE }, signal),
   });
-  if (results.isLoading) return <div className="loading">Loading…</div>;
-  if (results.isError) return <div className="error-state">Could not load results.</div>;
-  if (!results.data) return null;
-  const items = results.data.items.filter((fp): fp is Extract<typeof fp, { foreign_principal_id: number }> =>
+  const items = (results.data?.items ?? []).filter((fp): fp is Extract<typeof fp, { foreign_principal_id: number }> =>
     "foreign_principal_id" in fp,
   );
   return (
     <div>
-      <ul className="record-list">
-        {items.map((fp) => (
-          <li key={fp.foreign_principal_id}>
-            <button className="row-btn" onClick={() => navigate({ kind: "foreign-principal", id: fp.foreign_principal_id })}>
-              <span>{fp.foreign_principal_name}</span>
-              <span className="row-meta">represented by {fp.registrant_name}</span>
-            </button>
-          </li>
-        ))}
-        {items.length === 0 && <li className="loading">No matches.</li>}
-      </ul>
-      <Pagination total={results.data.total} offset={offset} setOffset={setOffset} pageSize={DRILLDOWN_PAGE_SIZE} />
+      <input
+        type="text"
+        value={qInput}
+        onChange={(e) => setQInput(e.target.value)}
+        placeholder="Search foreign principals…"
+        style={SEARCH_INPUT_STYLE}
+      />
+      {results.isLoading && <div className="loading">Loading…</div>}
+      {results.isError && <div className="error-state">Could not load results.</div>}
+      {results.data && (
+        <>
+          <ul className="record-list">
+            {items.map((fp) => (
+              <li key={fp.foreign_principal_id}>
+                <button className="row-btn" onClick={() => navigate({ kind: "foreign-principal", id: fp.foreign_principal_id })}>
+                  <span>{fp.foreign_principal_name}</span>
+                  <span className="row-meta">represented by {fp.registrant_name}</span>
+                </button>
+              </li>
+            ))}
+            {items.length === 0 && <li className="loading">No matches.</li>}
+          </ul>
+          <Pagination total={results.data.total} offset={offset} setOffset={setOffset} pageSize={DRILLDOWN_PAGE_SIZE} />
+        </>
+      )}
     </div>
   );
 }
@@ -82,34 +112,45 @@ function ForeignPrincipalsDrilldown({ name }: { name: string }) {
 function ContactsDrilldown({ name }: { name: string }) {
   const navigate = useStore((s) => s.navigate);
   const [offset, setOffset] = useState(0);
+  const [qInput, setQInput, q] = useDebouncedSearch(() => setOffset(0));
   const results = useQuery({
-    queryKey: ["country-contacts", name, offset],
-    queryFn: ({ signal }) => api.countryContacts(name, offset, DRILLDOWN_PAGE_SIZE, signal),
+    queryKey: ["country-contacts", name, q, offset],
+    queryFn: ({ signal }) => api.countryContacts(name, { q, offset, limit: DRILLDOWN_PAGE_SIZE }, signal),
   });
-  if (results.isLoading) return <div className="loading">Loading…</div>;
-  if (results.isError) return <div className="error-state">Could not load results.</div>;
-  if (!results.data) return null;
   return (
     <div>
-      <ul className="record-list">
-        {results.data.items.map((c) => (
-          <li key={`${c.reportable_contact_id}`}>
-            <button className="row-btn" onClick={() => navigate({ kind: "document", id: c.registrant_doc_id })}>
-              <span>
-                {c.contact_name_raw}
-                {c.purpose && <span className="row-meta"> · {c.purpose}</span>}
-              </span>
-              <span className="row-meta">
-                {c.registrant_name}
-                {c.contact_method && ` · ${c.contact_method}`}
-                {" · "}{formatDate(c.contact_date)}
-              </span>
-            </button>
-          </li>
-        ))}
-        {results.data.items.length === 0 && <li className="loading">No matches.</li>}
-      </ul>
-      <Pagination total={results.data.total} offset={offset} setOffset={setOffset} pageSize={DRILLDOWN_PAGE_SIZE} />
+      <input
+        type="text"
+        value={qInput}
+        onChange={(e) => setQInput(e.target.value)}
+        placeholder="Search contacts…"
+        style={SEARCH_INPUT_STYLE}
+      />
+      {results.isLoading && <div className="loading">Loading…</div>}
+      {results.isError && <div className="error-state">Could not load results.</div>}
+      {results.data && (
+        <>
+          <ul className="record-list">
+            {results.data.items.map((c) => (
+              <li key={`${c.reportable_contact_id}`}>
+                <button className="row-btn" onClick={() => navigate({ kind: "document", id: c.registrant_doc_id })}>
+                  <span>
+                    {c.contact_name_raw}
+                    {c.purpose && <span className="row-meta"> · {c.purpose}</span>}
+                  </span>
+                  <span className="row-meta">
+                    {c.registrant_name}
+                    {c.contact_method && ` · ${c.contact_method}`}
+                    {" · "}{formatDate(c.contact_date)}
+                  </span>
+                </button>
+              </li>
+            ))}
+            {results.data.items.length === 0 && <li className="loading">No matches.</li>}
+          </ul>
+          <Pagination total={results.data.total} offset={offset} setOffset={setOffset} pageSize={DRILLDOWN_PAGE_SIZE} />
+        </>
+      )}
     </div>
   );
 }
@@ -117,31 +158,42 @@ function ContactsDrilldown({ name }: { name: string }) {
 function ContributionsDrilldown({ name }: { name: string }) {
   const navigate = useStore((s) => s.navigate);
   const [offset, setOffset] = useState(0);
+  const [qInput, setQInput, q] = useDebouncedSearch(() => setOffset(0));
   const results = useQuery({
-    queryKey: ["country-contributions", name, offset],
-    queryFn: ({ signal }) => api.countryContributions(name, offset, DRILLDOWN_PAGE_SIZE, signal),
+    queryKey: ["country-contributions", name, q, offset],
+    queryFn: ({ signal }) => api.countryContributions(name, { q, offset, limit: DRILLDOWN_PAGE_SIZE }, signal),
   });
-  if (results.isLoading) return <div className="loading">Loading…</div>;
-  if (results.isError) return <div className="error-state">Could not load results.</div>;
-  if (!results.data) return null;
   return (
     <div>
-      <ul className="record-list">
-        {results.data.items.map((c, i) => (
-          <li key={`${c.registrant_doc_id}-${i}`}>
-            <button className="row-btn" onClick={() => navigate({ kind: "document", id: c.registrant_doc_id })}>
-              <span>{c.recipient_raw ?? "(no recipient recorded)"}</span>
-              <span className="row-meta">
-                {c.registrant_name}
-                {c.amount !== null && ` · ${fmtMoney(c.amount)}`}
-                {" · "}{formatDate(c.contribution_date)}
-              </span>
-            </button>
-          </li>
-        ))}
-        {results.data.items.length === 0 && <li className="loading">No matches.</li>}
-      </ul>
-      <Pagination total={results.data.total} offset={offset} setOffset={setOffset} pageSize={DRILLDOWN_PAGE_SIZE} />
+      <input
+        type="text"
+        value={qInput}
+        onChange={(e) => setQInput(e.target.value)}
+        placeholder="Search recipients…"
+        style={SEARCH_INPUT_STYLE}
+      />
+      {results.isLoading && <div className="loading">Loading…</div>}
+      {results.isError && <div className="error-state">Could not load results.</div>}
+      {results.data && (
+        <>
+          <ul className="record-list">
+            {results.data.items.map((c, i) => (
+              <li key={`${c.registrant_doc_id}-${i}`}>
+                <button className="row-btn" onClick={() => navigate({ kind: "document", id: c.registrant_doc_id })}>
+                  <span>{c.recipient_raw ?? "(no recipient recorded)"}</span>
+                  <span className="row-meta">
+                    {c.registrant_name}
+                    {c.amount !== null && ` · ${fmtMoney(c.amount)}`}
+                    {" · "}{formatDate(c.contribution_date)}
+                  </span>
+                </button>
+              </li>
+            ))}
+            {results.data.items.length === 0 && <li className="loading">No matches.</li>}
+          </ul>
+          <Pagination total={results.data.total} offset={offset} setOffset={setOffset} pageSize={DRILLDOWN_PAGE_SIZE} />
+        </>
+      )}
     </div>
   );
 }
