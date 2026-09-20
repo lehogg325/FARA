@@ -1,12 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { lazy, Suspense, useRef, useState } from "react";
 import { api } from "../api/client";
-import { GraphView, type GraphViewHandle } from "./GraphView";
+import type { GraphViewHandle } from "./GraphView";
 import { Pagination } from "./Pagination";
 import { Tabs } from "./Tabs";
 import { TopEntityList } from "./TopEntityList";
 import { useStore } from "../state/store";
 import { formatCurrency, formatDate } from "../utils/format";
+
+// sigma/graphology (statically imported inside GraphView.tsx) are only used
+// here, on a country's Network tab — lazy-loading keeps them out of the bundle
+// every other page, including the plain-text home page, has to download.
+const GraphView = lazy(() => import("./GraphView").then((m) => ({ default: m.GraphView })));
 
 const DRILLDOWN_PAGE_SIZE = 25;
 
@@ -238,7 +243,11 @@ function NetworkTab({ name }: { name: string }) {
       <div style={{ flex: "2 1 520px", minWidth: 320 }}>
         {graph.isLoading && <div className="loading">Loading graph…</div>}
         {graph.isError && <div className="error-state">Could not load graph.</div>}
-        {graph.data && <GraphView ref={graphRef} countryName={name} data={graph.data} />}
+        {graph.data && (
+          <Suspense fallback={<div className="loading">Loading graph…</div>}>
+            <GraphView ref={graphRef} countryName={name} data={graph.data} />
+          </Suspense>
+        )}
       </div>
       <div style={{ flex: "1 1 280px", minWidth: 260 }}>
         <TopEntityList

@@ -4,6 +4,7 @@ import { DocumentSearchView } from "./components/DocumentSearchView";
 import { DocumentsBrowseView } from "./components/DocumentsBrowseView";
 import { DocumentView } from "./components/DocumentView";
 import { EmptyState } from "./components/EmptyState";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Footer } from "./components/Footer";
 import { ForeignPrincipalGroupView } from "./components/ForeignPrincipalGroupView";
 import { ForeignPrincipalsBrowseView } from "./components/ForeignPrincipalsBrowseView";
@@ -61,19 +62,21 @@ export default function App() {
       </header>
 
       <main className="main">
-        {view.kind === "home" && <EmptyState />}
-        {view.kind === "registrant" && <RegistrantView id={view.id} />}
-        {view.kind === "registrant-group" && <RegistrantGroupView name={view.name} />}
-        {view.kind === "foreign-principal" && <ForeignPrincipalView id={view.id} />}
-        {view.kind === "foreign-principal-group" && (
-          <ForeignPrincipalGroupView name={view.name} country={view.country} />
-        )}
-        {view.kind === "foreign-principals-browse" && <ForeignPrincipalsBrowseView />}
-        {view.kind === "registrants-browse" && <RegistrantsBrowseView />}
-        {view.kind === "documents-browse" && <DocumentsBrowseView />}
-        {view.kind === "document" && <DocumentView id={view.id} />}
-        {view.kind === "document-search" && <DocumentSearchView q={view.q} />}
-        {view.kind === "country" && <CountryView name={view.name} tab={view.tab} />}
+        <ErrorBoundary key={JSON.stringify(view)}>
+          {view.kind === "home" && <EmptyState />}
+          {view.kind === "registrant" && <RegistrantView id={view.id} />}
+          {view.kind === "registrant-group" && <RegistrantGroupView name={view.name} />}
+          {view.kind === "foreign-principal" && <ForeignPrincipalView id={view.id} />}
+          {view.kind === "foreign-principal-group" && (
+            <ForeignPrincipalGroupView name={view.name} country={view.country} />
+          )}
+          {view.kind === "foreign-principals-browse" && <ForeignPrincipalsBrowseView />}
+          {view.kind === "registrants-browse" && <RegistrantsBrowseView />}
+          {view.kind === "documents-browse" && <DocumentsBrowseView />}
+          {view.kind === "document" && <DocumentView id={view.id} />}
+          {view.kind === "document-search" && <DocumentSearchView q={view.q} />}
+          {view.kind === "country" && <CountryView name={view.name} tab={view.tab} />}
+        </ErrorBoundary>
       </main>
 
       <Footer />

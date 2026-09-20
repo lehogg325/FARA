@@ -1,5 +1,7 @@
 // Typed wrappers over the FARA backend API. All data comes from our own
 // Postgres (mined from efile.fara.gov) — the browser never talks to FARA directly.
+import type { z } from "zod";
+import { countryDetailSchema, metaSchema, searchResultsSchema } from "./schemas";
 
 export interface Page<T> {
   items: T[];
@@ -275,6 +277,17 @@ async function get<T>(url: string, signal?: AbortSignal): Promise<T> {
   return r.json() as Promise<T>;
 }
 
+// Same as get<T>(), but actually checks the response shape instead of trusting
+// a compile-time-only cast — a schema mismatch (backend bug, migration drift)
+// throws here and surfaces as the query's normal isError state, rather than
+// silently rendering undefined fields as blank. Reserved for the highest-
+// traffic endpoints; everything else still uses the bare-cast get<T>() above.
+async function getValidated<S extends z.ZodType>(url: string, schema: S, signal?: AbortSignal): Promise<z.infer<S>> {
+  const r = await fetch(url, { signal });
+  if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
+  return schema.parse(await r.json());
+}
+
 const qs = (params: Record<string, string | number | undefined>): string => {
   const search = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
@@ -285,11 +298,11 @@ const qs = (params: Record<string, string | number | undefined>): string => {
 };
 
 export const api = {
-  meta: (signal?: AbortSignal) => get<Meta>("/api/meta", signal),
+  meta: (signal?: AbortSignal) => getValidated("/api/meta", metaSchema, signal),
   documentTypes: (signal?: AbortSignal) => get<DocumentType[]>("/api/document-types", signal),
 
   search: (q: string, type?: EntityType, signal?: AbortSignal) =>
-    get<SearchResult[]>(`/api/search${qs({ q, type, limit: 15 })}`, signal),
+    getValidated(`/api/search${qs({ q, type, limit: 15 })}`, searchResultsSchema, signal),
 
   registrant: (id: number, signal?: AbortSignal) => get<RegistrantDetail>(`/api/registrants/${id}`, signal),
   registrantsByName: (name: string, signal?: AbortSignal) =>
@@ -334,7 +347,8 @@ export const api = {
   ) => get<Page<RegistrantDoc>>(`/api/documents${qs(params)}`, signal),
 
   countries: (signal?: AbortSignal) => get<Country[]>("/api/countries", signal),
-  country: (name: string, signal?: AbortSignal) => get<CountryDetail>(`/api/countries/${encodeURIComponent(name)}`, signal),
+  country: (name: string, signal?: AbortSignal) =>
+    getValidated(`/api/countries/${encodeURIComponent(name)}`, countryDetailSchema, signal),
   countryTopics: (name: string, signal?: AbortSignal) =>
     get<TopicCount[]>(`/api/countries/${encodeURIComponent(name)}/topics`, signal),
   countryGraph: (name: string, signal?: AbortSignal) =>

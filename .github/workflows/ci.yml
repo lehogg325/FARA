@@ -1,0 +1,80 @@
+name: ci
+
+# Gate on every push/PR — the only workflow in this repo that runs tests before
+# code reaches main. Everything else here (ingest-bulk, ingest-poll,
+# docs-and-extract) is scheduled data-pipeline work, not a merge gate: without
+# this, a broken commit only gets caught if someone happens to run pytest/build
+# locally first, and it still deploys straight to production either way (Vercel's
+# git integration deploys every push to main automatically).
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: fara
+          POSTGRES_PASSWORD: fara
+          POSTGRES_DB: fara
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # conftest.py's test_dsn fixture creates fara_test itself against this DSN.
+      FARA_TEST_DATABASE_URL: postgresql://fara:fara@localhost:5432/fara_test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - run: uv python install 3.12
+      - run: uv sync --all-packages
+
+      # Every test suite in the workspace shares the same self-bootstrapping
+      # fixture pattern (create-db-if-missing, migrate, per-test truncate) —
+      # not just backend/tests.
+      - name: Run backend tests
+        run: uv run pytest -q
+        working-directory: backend
+
+      - name: Run pipeline/normalize tests
+        run: uv run pytest -q
+        working-directory: pipeline/normalize
+
+      - name: Run pipeline/extract tests
+        run: uv run pytest -q
+        working-directory: pipeline/extract
+
+      - name: Audit Python dependencies
+        run: uvx pip-audit
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+      - run: npm run build
+      - run: npm run test
+      - run: npm audit --audit-level=high
