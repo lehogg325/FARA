@@ -133,12 +133,18 @@ function ContactsDrilldown({ name }: { name: string }) {
           <ul className="record-list">
             {results.data.items.map((c) => (
               <li key={`${c.reportable_contact_id}`}>
-                <button className="row-btn" onClick={() => navigate({ kind: "document", id: c.registrant_doc_id })}>
-                  <span>
-                    {c.contact_name_raw}
-                    {c.purpose && <span className="row-meta"> · {c.purpose}</span>}
-                  </span>
-                  <span className="row-meta">
+                <button
+                  className="row-btn"
+                  style={{ flexDirection: "column", alignItems: "flex-start", gap: 4 }}
+                  onClick={() => navigate({ kind: "document", id: c.registrant_doc_id })}
+                >
+                  <span>{c.contact_name_raw}</span>
+                  {c.purpose && (
+                    <span style={{ fontFamily: "var(--serif-body)", fontSize: 13, color: "var(--lunar)" }}>
+                      {c.purpose}
+                    </span>
+                  )}
+                  <span className="row-meta" style={{ whiteSpace: "normal" }}>
                     {c.registrant_name}
                     {c.contact_method && ` · ${c.contact_method}`}
                     {" · "}{formatDate(c.contact_date)}
