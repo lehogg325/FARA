@@ -51,7 +51,11 @@ function RegistrantsDrilldown({ name }: { name: string }) {
           <ul className="record-list">
             {results.data.items.map((r) => (
               <li key={r.registrant_id}>
-                <button className="row-btn" onClick={() => navigate({ kind: "registrant", id: r.registrant_id })}>
+                <button
+                  className="row-btn"
+                  style={{ flexDirection: "column", alignItems: "flex-start", gap: 3 }}
+                  onClick={() => navigate({ kind: "registrant", id: r.registrant_id })}
+                >
                   <span>{r.name}</span>
                   <span className="row-meta">{[r.city, r.state].filter(Boolean).join(", ") || "—"}</span>
                 </button>
@@ -94,7 +98,11 @@ function ForeignPrincipalsDrilldown({ name }: { name: string }) {
           <ul className="record-list">
             {items.map((fp) => (
               <li key={fp.foreign_principal_id}>
-                <button className="row-btn" onClick={() => navigate({ kind: "foreign-principal", id: fp.foreign_principal_id })}>
+                <button
+                  className="row-btn"
+                  style={{ flexDirection: "column", alignItems: "flex-start", gap: 3 }}
+                  onClick={() => navigate({ kind: "foreign-principal", id: fp.foreign_principal_id })}
+                >
                   <span>{fp.foreign_principal_name}</span>
                   <span className="row-meta">represented by {fp.registrant_name}</span>
                 </button>
@@ -144,7 +152,7 @@ function ContactsDrilldown({ name }: { name: string }) {
                       {c.purpose}
                     </span>
                   )}
-                  <span className="row-meta" style={{ whiteSpace: "normal" }}>
+                  <span className="row-meta">
                     {c.registrant_name}
                     {c.contact_method && ` · ${c.contact_method}`}
                     {" · "}{formatDate(c.contact_date)}
@@ -185,7 +193,11 @@ function ContributionsDrilldown({ name }: { name: string }) {
           <ul className="record-list">
             {results.data.items.map((c, i) => (
               <li key={`${c.registrant_doc_id}-${i}`}>
-                <button className="row-btn" onClick={() => navigate({ kind: "document", id: c.registrant_doc_id })}>
+                <button
+                  className="row-btn"
+                  style={{ flexDirection: "column", alignItems: "flex-start", gap: 3 }}
+                  onClick={() => navigate({ kind: "document", id: c.registrant_doc_id })}
+                >
                   <span>{c.recipient_raw ?? "(no recipient recorded)"}</span>
                   <span className="row-meta">
                     {c.registrant_name}

@@ -69,7 +69,11 @@ export function RegistrantView({ id }: { id: number }) {
         offset={fpOffset}
         setOffset={setFpOffset}
         renderItem={(fp) => (
-          <button className="row-btn" onClick={() => navigate({ kind: "foreign-principal", id: fp.foreign_principal_id })}>
+          <button
+            className="row-btn"
+            style={{ flexDirection: "column", alignItems: "flex-start", gap: 3 }}
+            onClick={() => navigate({ kind: "foreign-principal", id: fp.foreign_principal_id })}
+          >
             <span>{fp.foreign_principal_name}</span>
             <span className="row-meta">{fp.country_raw ?? "—"} · {formatDate(fp.registration_date)}</span>
           </button>
@@ -85,7 +89,7 @@ export function RegistrantView({ id }: { id: number }) {
         offset={sfOffset}
         setOffset={setSfOffset}
         renderItem={(sf) => (
-          <div className="row-btn" style={{ cursor: "default" }}>
+          <div className="row-btn" style={{ cursor: "default", flexDirection: "column", alignItems: "flex-start", gap: 3 }}>
             <span>{[sf.first_name, sf.last_name].filter(Boolean).join(" ") || "(unnamed)"}</span>
             <span className="row-meta">{formatDate(sf.short_form_date)}</span>
           </div>
@@ -101,7 +105,11 @@ export function RegistrantView({ id }: { id: number }) {
         offset={docOffset}
         setOffset={setDocOffset}
         renderItem={(doc) => (
-          <button className="row-btn" onClick={() => navigate({ kind: "document", id: doc.registrant_doc_id })}>
+          <button
+            className="row-btn"
+            style={{ flexDirection: "column", alignItems: "flex-start", gap: 3 }}
+            onClick={() => navigate({ kind: "document", id: doc.registrant_doc_id })}
+          >
             <span>{doc.document_type_raw_label}</span>
             <span className="row-meta">{formatDate(doc.date_stamped)}</span>
           </button>

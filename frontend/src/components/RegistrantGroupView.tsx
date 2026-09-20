@@ -26,7 +26,11 @@ export function RegistrantGroupView({ name }: { name: string }) {
         <ul className="record-list">
           {g.registrants.map((r) => (
             <li key={r.registrant_id}>
-              <button className="row-btn" onClick={() => navigate({ kind: "registrant", id: r.registrant_id })}>
+              <button
+                className="row-btn"
+                style={{ flexDirection: "column", alignItems: "flex-start", gap: 3 }}
+                onClick={() => navigate({ kind: "registrant", id: r.registrant_id })}
+              >
                 <span>
                   #{r.registration_number}
                   <span className={`status-pill ${r.status}`}>{r.status}</span>

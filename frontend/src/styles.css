@@ -403,7 +403,6 @@ select {
   font-family: var(--mono);
   font-size: 10.5px;
   color: var(--gray);
-  white-space: nowrap;
 }
 .pagination {
   display: flex;

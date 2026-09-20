@@ -33,7 +33,11 @@ export function ForeignPrincipalGroupView({ name, country }: { name: string; cou
           <ul className="record-list">
             {g.registrants.map((reg) => (
               <li key={reg.registrant_id}>
-                <button className="row-btn" onClick={() => navigate({ kind: "registrant", id: reg.registrant_id })}>
+                <button
+                  className="row-btn"
+                  style={{ flexDirection: "column", alignItems: "flex-start", gap: 3 }}
+                  onClick={() => navigate({ kind: "registrant", id: reg.registrant_id })}
+                >
                   <span>{reg.name}</span>
                   <span className="row-meta">{reg.status} · #{reg.registration_number}</span>
                 </button>

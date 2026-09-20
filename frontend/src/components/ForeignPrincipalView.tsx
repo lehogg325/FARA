@@ -39,7 +39,11 @@ export function ForeignPrincipalView({ id }: { id: number }) {
         <div className="section-title">Represented by</div>
         <ul className="record-list">
           <li>
-            <button className="row-btn" onClick={() => navigate({ kind: "registrant", id: f.registrant_id })}>
+            <button
+              className="row-btn"
+              style={{ flexDirection: "column", alignItems: "flex-start", gap: 3 }}
+              onClick={() => navigate({ kind: "registrant", id: f.registrant_id })}
+            >
               <span>Registrant #{f.registration_number}</span>
               <span className="row-meta">view registrant &rarr;</span>
             </button>
